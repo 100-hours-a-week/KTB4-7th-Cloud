@@ -1,0 +1,14 @@
+.idea/
+.vscode/
+.DS_Store
+
+.terraform/
+*.tfstate
+*.tfstate.*
+
+.env
+.env.*
+*.pem
+# Runtime files rendered only on EC2
+deploy/*/.runtime.env
+deploy/*/runtime/
