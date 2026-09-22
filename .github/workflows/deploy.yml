@@ -1,0 +1,169 @@
+name: Deploy service
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Service to deploy
+        required: true
+        type: choice
+        options: [backend, ai]
+      image_digest:
+        description: Immutable ECR digest (sha256:...)
+        required: true
+        type: string
+      commit_sha:
+        description: Full source commit SHA that produced the image
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: cd-${{ inputs.service }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve target
+        id: target
+        shell: bash
+        run: |
+          case '${{ inputs.service }}' in
+            backend)
+              echo 'instance_id=${{ vars.BACKEND_INSTANCE_ID }}' >> "$GITHUB_OUTPUT"
+              echo 'repository=${{ vars.BACKEND_ECR_REPOSITORY }}' >> "$GITHUB_OUTPUT"
+              echo 'secret_id=${{ vars.BACKEND_RUNTIME_SECRET_ID }}' >> "$GITHUB_OUTPUT"
+              ;;
+            ai)
+              echo 'instance_id=${{ vars.AI_INSTANCE_ID }}' >> "$GITHUB_OUTPUT"
+              echo 'repository=${{ vars.AI_ECR_REPOSITORY }}' >> "$GITHUB_OUTPUT"
+              echo 'secret_id=${{ vars.AI_RUNTIME_SECRET_ID }}' >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+          test -n "$(tail -n 1 "$GITHUB_OUTPUT")"
+
+      - name: Validate immutable deployment target
+        shell: bash
+        env:
+          DIGEST: ${{ inputs.image_digest }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          INSTANCE_ID: ${{ steps.target.outputs.instance_id }}
+          REPOSITORY: ${{ steps.target.outputs.repository }}
+          SECRET_ID: ${{ steps.target.outputs.secret_id }}
+        run: |
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          [[ "$COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$INSTANCE_ID" =~ ^i-[a-f0-9]{17}$ ]]
+          [[ "$REPOSITORY" == memme/* ]]
+          [[ "$SECRET_ID" == /memme/prod/*/runtime ]]
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Verify ECR digest exists
+        shell: bash
+        env:
+          REPOSITORY: ${{ steps.target.outputs.repository }}
+          DIGEST: ${{ inputs.image_digest }}
+        run: |
+          aws ecr describe-images --repository-name "$REPOSITORY" --image-ids imageDigest="$DIGEST" --query 'imageDetails[0].imageDigest' --output text | grep -Fx "$DIGEST"
+
+      - name: Run Blue-Green deployment through SSM
+        id: command
+        shell: bash
+        env:
+          SERVICE: ${{ inputs.service }}
+          IMAGE: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/${{ steps.target.outputs.repository }}@${{ inputs.image_digest }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          INSTANCE_ID: ${{ steps.target.outputs.instance_id }}
+          RUNTIME_SECRET_ID: ${{ steps.target.outputs.secret_id }}
+          CLOUD_SHA: ${{ github.sha }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+        run: |
+          # shellcheck disable=SC2034
+          export SERVICE IMAGE COMMIT_SHA INSTANCE_ID RUNTIME_SECRET_ID CLOUD_SHA AWS_REGION AWS_ACCOUNT_ID
+          python3 - <<'PY' > command.json
+          import json
+          import os
+          import shlex
+
+          service = os.environ["SERVICE"]
+          base = f"/opt/memme/{service}"
+          q = shex.quote
+          commands = [
+              "set -Eeuo pipefail",
+              f"base={q(base)}",
+              "mkdir -p /opt/memme",
+              "for required in git docker aws python3; do command -v \"$required\" >/dev/null || { echo \"Required command is missing: $required\" >&2; exit 2; }; done",
+              f"if [ ! -d {q(base + '/.git')} ]; then git clone --no-checkout https://github.com/100-hours-a-week/KTB4-7th-Cloud.git {q(base)}; fi",
+              f"git -C {q(base)} fetch --depth=1 origin {q(os.environ['CLOUD_SHA'])}",
+              f"git -C {q(base)} checkout --detach --force {q(os.environ['CLOUD_SHA'])}",
+              f"export AWS_REGION={q(os.environ['AWS_REGION'])} AWS_ACCOUN_ID={q(os.environ['AWS_ACCOUNT_ID'])}",
+              f"{q(base + '/deploy/' + service + '/deploy.sh')} {q(os.environ['IMAGE'])} {q(os.environ['COMMIT_SHA'])} {q(os.environ['RUNTIME_SECRET_ID'])}",
+          ]
+          print(json.dumps({
+              "DocumentName": "AWS-RunShellScript",
+              "InstanceIds": [os.environ["INSTANCE_ID"]],
+              "Parameters": {"commands": commands},
+              "CloudWatchOutputConfig": {"CloudWatchOutputEnabled": True},
+              "Comment": f"memme {service} Blue-Green deployment",
+          }))
+          PY
+          command_id="$(aws ssm send-command --cli-input-json file://command.json --query 'Command.CommandId' --output text)"
+          echo "command_id=${command_id}" >> "$GITHUB_OUTPUT"
+          echo "SSM command: ${command_id}"
+
+      - name: Wait for deployment
+        shell: bash
+        env:
+          COMMAND_ID: ${{ steps.command.outputs.command_id }}
+          INSTANCE_ID: ${{ steps.target.outputs.instance_id }}
+        run: |
+          for _ in $(seq 1 90); do
+            status="$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || true)"
+            case "$status" in
+              Success)
+                aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query StandardOutputContent --output text
+                exit 0
+                ;;
+              Failed|Cancelled|TimedOut)
+                aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query '{status:Status,error:StandardErrorContent}' --output json >&2
+                exit 1
+                ;;
+            esac
+            sleep 5
+          done
+          echo "Timed out waiting for SSM command ${COMMAND_ID}" >&2
+          exit 1
+
+      - name: Record deployment
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Deployment record"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Service | \`${{ inputs.service }}\` |"
+            echo "| Source commit | \`${{ inputs.commit_sha }}\` |"
+            echo "| Image digest | \`${{ inputs.image_digest }}\` |"
+            echo "| Cloud configuration commit | \`${{ github.sha }}\` |"
+            echo "| SSM command | \`${{ steps.command.outputs.command_id }}\` |"
+            echo "| Result | \`${{ job.status }}\` |"
+            echo "| Time (UTC) | \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
