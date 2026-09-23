@@ -15,6 +15,10 @@ active_file="${state_dir}/active-color"
 upstream_file="${state_dir}/upstream.conf"
 project="memme-${service}"
 registry="${AWS_ACCOUNT_ID:?AWS_ACCOUNT_ID is required}.dkr.ecr.${AWS_REGION:?AWS_REGION is required}.amazonaws.com"
+proxy_health_port=80
+if [[ "${service}" == backend ]]; then
+  proxy_health_port=8081
+fi
 
 if [[ ! "${image}" =~ ^${registry//./\\.}/${expected_repository//\//\\/}@sha256:[a-f0-9]{64}$ ]]; then
   echo "Image must be the expected immutable ECR digest." >&2
@@ -124,7 +128,7 @@ fi
 
 if ! write_upstream "${candidate}" \
   || ! IMAGE="${image}" STATE_DIR="${state_dir}" "${compose[@]}" exec -T nginx nginx -s reload \
-  || ! IMAGE="${image}" STATE_DIR="${state_dir}" "${compose[@]}" exec -T nginx wget -qO- http://127.0.0.1/health | grep -q '"status":"ok"'; then
+  || ! IMAGE="${image}" STATE_DIR="${state_dir}" "${compose[@]}" exec -T nginx wget -qO- "http://127.0.0.1:${proxy_health_port}/health" | grep -q '"status":"ok"'; then
   restore_previous_upstream "${previous}" || true
   IMAGE="${image}" STATE_DIR="${state_dir}" "${compose[@]}" rm -sf "${service}-${candidate}" || true
   echo "Traffic switch failed; restored the previous upstream." >&2

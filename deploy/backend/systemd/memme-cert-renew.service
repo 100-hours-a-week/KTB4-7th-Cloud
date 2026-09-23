@@ -1,0 +1,8 @@
+[Unit]
+Description=Renew api.memme.kr TLS certificate
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/memme/backend/deploy/backend/renew-cert.sh
