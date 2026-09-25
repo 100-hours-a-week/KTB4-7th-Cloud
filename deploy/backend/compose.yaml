@@ -7,7 +7,7 @@ services:
       - "443:443"
       - "8080:8080"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./.runtime.nginx.conf:/etc/nginx/nginx.conf:ro
       - ${STATE_DIR:-./runtime}:/etc/nginx/conf.d:ro
       - ${ACME_WEBROOT:-/opt/memme/acme-challenge}:/var/www/acme:ro
       - ${TLS_CERT_DIR:-/etc/letsencrypt}:/etc/letsencrypt:ro
