@@ -11,4 +11,5 @@
 *.pem
 # Runtime files rendered only on EC2
 deploy/*/.runtime.env
+deploy/*/.runtime.nginx.conf
 deploy/*/runtime/

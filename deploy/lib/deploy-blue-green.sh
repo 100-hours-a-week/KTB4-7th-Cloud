@@ -11,6 +11,7 @@ secret_id="${6:?runtime secret id is required}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../${service}" && pwd)"
 state_dir="${script_dir}/runtime"
 runtime_env="${script_dir}/.runtime.env"
+runtime_nginx_conf="${script_dir}/.runtime.nginx.conf"
 active_file="${state_dir}/active-color"
 upstream_file="${state_dir}/upstream.conf"
 project="memme-${service}"
@@ -101,6 +102,13 @@ mkdir -p "${state_dir}"
 chmod 700 "${state_dir}"
 if [[ ! -f "${upstream_file}" ]]; then
   cp "${script_dir}/nginx/upstream.default.conf" "${upstream_file}"
+fi
+
+# Keep the bind mount on one inode across git checkouts. Git replaces tracked
+# files, which otherwise leaves the running nginx container with stale config.
+if [[ "${service}" == backend ]]; then
+  cat "${script_dir}/nginx/nginx.conf" > "${runtime_nginx_conf}"
+  chmod 644 "${runtime_nginx_conf}"
 fi
 
 write_runtime_env
