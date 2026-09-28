@@ -7,19 +7,10 @@ on:
         description: Service to deploy
         required: true
         type: choice
-        options: [backend, ai]
-      image_digest:
-        description: Immutable ECR digest (sha256:...)
-        required: true
-        type: string
-      commit_sha:
-        description: Full source commit SHA that produced the image
-        required: true
-        type: string
+        options: [backend, ai, frontend]
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: cd-${{ inputs.service }}
@@ -28,11 +19,21 @@ concurrency:
 jobs:
   deploy:
     name: Deploy ${{ inputs.service }}
+    if: github.ref == 'refs/heads/main' && inputs.service != 'frontend'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve latest successful dev CI
+        id: ci
+        env:
+          SERVICE: ${{ inputs.service }}
+        run: python3 deploy/resolve-latest-ci.py "$SERVICE" >> "$GITHUB_OUTPUT"
 
       - name: Resolve target
         id: target
@@ -55,13 +56,11 @@ jobs:
       - name: Validate immutable deployment target
         shell: bash
         env:
-          DIGEST: ${{ inputs.image_digest }}
-          COMMIT_SHA: ${{ inputs.commit_sha }}
+          COMMIT_SHA: ${{ steps.ci.outputs.commit_sha }}
           INSTANCE_ID: ${{ steps.target.outputs.instance_id }}
           REPOSITORY: ${{ steps.target.outputs.repository }}
           SECRET_ID: ${{ steps.target.outputs.secret_id }}
         run: |
-          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
           [[ "$COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]]
           [[ "$INSTANCE_ID" =~ ^i-[a-f0-9]{17}$ ]]
           [[ "$REPOSITORY" == memme/* ]]
@@ -73,21 +72,24 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Verify ECR digest exists
+      - name: Resolve immutable ECR image
+        id: image
         shell: bash
         env:
           REPOSITORY: ${{ steps.target.outputs.repository }}
-          DIGEST: ${{ inputs.image_digest }}
+          COMMIT_SHA: ${{ steps.ci.outputs.commit_sha }}
         run: |
-          aws ecr describe-images --repository-name "$REPOSITORY" --image-ids imageDigest="$DIGEST" --query 'imageDetails[0].imageDigest' --output text | grep -Fx "$DIGEST"
+          digest="$(aws ecr describe-images --repository-name "$REPOSITORY" --image-ids imageTag="$COMMIT_SHA" --query 'imageDetails[0].imageDigest' --output text)"
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
       - name: Run Blue-Green deployment through SSM
         id: command
         shell: bash
         env:
           SERVICE: ${{ inputs.service }}
-          IMAGE: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/${{ steps.target.outputs.repository }}@${{ inputs.image_digest }}
-          COMMIT_SHA: ${{ inputs.commit_sha }}
+          IMAGE: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/${{ steps.target.outputs.repository }}@${{ steps.image.outputs.digest }}
+          COMMIT_SHA: ${{ steps.ci.outputs.commit_sha }}
           INSTANCE_ID: ${{ steps.target.outputs.instance_id }}
           RUNTIME_SECRET_ID: ${{ steps.target.outputs.secret_id }}
           CLOUD_SHA: ${{ github.sha }}
@@ -160,10 +162,85 @@ jobs:
             echo "| Field | Value |"
             echo "| --- | --- |"
             echo "| Service | \`${{ inputs.service }}\` |"
-            echo "| Source commit | \`${{ inputs.commit_sha }}\` |"
-            echo "| Image digest | \`${{ inputs.image_digest }}\` |"
+            echo "| Source commit | \`${{ steps.ci.outputs.commit_sha }}\` |"
+            echo "| CI run | ${{ steps.ci.outputs.ci_run_url }} |"
+            echo "| Image digest | \`${{ steps.image.outputs.digest }}\` |"
             echo "| Cloud configuration commit | \`${{ github.sha }}\` |"
             echo "| SSM command | \`${{ steps.command.outputs.command_id }}\` |"
+            echo "| Result | \`${{ job.status }}\` |"
+            echo "| Time (UTC) | \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-frontend:
+    name: Deploy frontend
+    if: github.ref == 'refs/heads/main' && inputs.service == 'frontend'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve latest successful frontend dev CI
+        id: ci
+        run: python3 deploy/resolve-latest-ci.py frontend >> "$GITHUB_OUTPUT"
+
+      - name: Check out verified frontend source
+        uses: actions/checkout@v4
+        with:
+          repository: 100-hours-a-week/KTB4-7th-FE
+          ref: ${{ steps.ci.outputs.commit_sha }}
+          path: frontend-source
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend-source/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend-source
+        env:
+          VITE_API_BASE_URL: https://api.memme.kr
+        run: |
+          npm ci
+          npm run build
+
+      - name: Verify Cloudflare configuration
+        env:
+          ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          test -n "$ACCOUNT_ID"
+          test -n "$API_TOKEN"
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: frontend-source
+          command: deploy
+
+      - name: Verify frontend routes
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 --output /dev/null https://memme.kr/
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 --header 'Sec-Fetch-Mode: navigate' --output /dev/null https://memme.kr/password-reset
+
+      - name: Record frontend deployment
+        if: always()
+        run: |
+          {
+            echo "## Frontend deployment record"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Service | \`frontend\` |"
+            echo "| Source commit | \`${{ steps.ci.outputs.commit_sha }}\` |"
+            echo "| CI run | ${{ steps.ci.outputs.ci_run_url }} |"
+            echo "| Cloud configuration commit | \`${{ github.sha }}\` |"
             echo "| Result | \`${{ job.status }}\` |"
             echo "| Time (UTC) | \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\` |"
           } >> "$GITHUB_STEP_SUMMARY"
