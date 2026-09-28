@@ -1,11 +1,11 @@
 # V1 CD 운영 가이드
 
-`Deploy service`는 `workflow_dispatch`로만 실행한다. 배포 시작 전, 배포 후보의 full commit SHA와 ECR image digest를 확인한다. CI가 만든 이미지를 자동으로 운영에 반영하지 않는다.
+`Deploy service`는 `workflow_dispatch`로만 실행한다. Cloud 저장소 `main`에서 서비스만 선택하면 현재 서비스 저장소 `dev`의 최신 커밋과 해당 커밋의 성공한 push CI를 확인한다. CI 성공만으로 운영에 자동 배포되지는 않는다. 최신 CI가 진행 중이거나 실패했다면 이전 이미지를 대신 배포하지 않고 중단한다.
 
 ## 동작
 
-1. Cloud Repository의 현재 commit을 대상 EC2에 고정한다.
-2. Cloud workflow가 입력한 digest의 ECR 존재 여부를 확인하고, EC2의 인스턴스 역할로 ECR에 로그인해 해당 이미지를 pull한다.
+1. 현재 `dev` SHA와 성공한 push CI를 확인하고, Cloud Repository의 현재 commit을 대상 EC2에 고정한다.
+2. 해당 SHA 태그의 ECR digest를 조회하고, EC2의 인스턴스 역할로 ECR에 로그인해 불변 digest 이미지를 pull한다.
 3. 현재 색상의 반대쪽 Blue/Green 컨테이너를 실행한다.
 4. 후보 컨테이너의 `/health`와 Nginx 경유 `/health`를 확인한다.
 5. 둘 다 성공하면 Nginx upstream을 후보 색상으로 reload한다.
@@ -26,6 +26,11 @@
 | `AI_ECR_REPOSITORY` | `memme/ai` |
 | `BACKEND_RUNTIME_SECRET_ID` | `/memme/prod/backend/runtime` |
 | `AI_RUNTIME_SECRET_ID` | `/memme/prod/ai/runtime` |
+| `CLOUDFLARE_ACCOUNT_ID` | `memme-fe` Worker가 속한 Cloudflare 계정 ID |
+
+Cloud Repository의 Actions Secret `CLOUDFLARE_API_TOKEN`에는 `memme-fe` Worker 배포와 `memme.kr` Custom Domain 관리가 가능한 Cloudflare API 토큰을 등록한다. 토큰 값은 워크플로 파일에 넣지 않는다. Frontend의 `dev` push CI가 최초로 성공한 후에만 Frontend 수동 CD를 실행한다.
+
+Frontend CD는 확인된 FE 커밋을 `VITE_API_BASE_URL=https://api.memme.kr`로 빌드하고, `wrangler.jsonc`의 SPA 라우팅을 적용해 `memme-fe` Worker에 배포한다. `memme.kr`과 `/password-reset` 응답을 확인하며, 배포 결과와 FE SHA·CI 링크를 Actions 요약에 남긴다.
 
 ## AWS Secrets Manager runtime secrets
 
