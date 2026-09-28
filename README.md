@@ -58,11 +58,10 @@ Backend·AI는 각각 EC2 한 대에서 Blue/Green 컨테이너를 운영합니�
 
 ## CI / CD
 
-1. **애플리케이션 Repository — CI**: Backend·AI의 `dev` 대상 PR에서 테스트·빌드를 실행합니다. `dev` 병합 후에는 Docker 빌드·컨테이너 헬스체크를 거쳐 전체 commit SHA 태그로 ECR에 이미지를 발행합니다.
-2. **Cloud Repository — 수동 CD**: Actions의 `Deploy service`에서 `main` 브랜치와 서비스(`backend` / `ai`), 성공한 CI의 `image_digest`, `commit_sha`를 입력합니다. CI 성공만으로 운영에 자동 배포되지는 않습니다.
-3. **EC2 배포**: GitHub OIDC 인증 → ECR digest 확인 → SSM 명령 실행 → Secret 주입 → 반대 색상 컨테이너 실행 → 헬스체크 → Nginx upstream 전환 순서로 진행합니다. 후보 컨테이너가 실패하면 기존 트래픽을 유지하고, 전환 검증이 실패하면 이전 upstream으로 복구합니다.
-4. **배포 기록**: GitHub Actions 요약과 EC2의 `runtime/current-deployment.json`에서 소스 SHA·이미지 digest·활성 색상·배포 결과를 확인합니다.
-
-Frontend는 현재 Cloudflare에 별도로 수동 배포하며, 이 저장소에는 Frontend 자동 배포 워크플로가 없습니다.
+1. **애플리케이션 Repository — CI**: Backend·AI는 `dev` 병합 후 테스트·컨테이너 헬스체크를 통과한 이미지를 전체 SHA 태그로 ECR에 발행합니다. Frontend는 PR과 `dev` push에서 린트·테스트·빌드를 실행합니다.
+2. **Cloud Repository — 수동 CD**: Actions의 `Deploy service`에서 `main` 브랜치와 서비스(`backend` / `ai` / `frontend`)만 선택합니다. 워크플로가 해당 저장소의 현재 `dev` SHA와 그 SHA의 성공한 push CI를 확인합니다. 최신 CI가 아직 실패·진행 중이면 배포를 중단합니다.
+3. **Backend·AI 배포**: 해당 SHA 태그의 ECR digest 조회 → GitHub OIDC → SSM 명령 → Secret 주입 → Blue/Green 헬스체크 → Nginx 전환 순서로 진행합니다. 실패하면 기존 트래픽을 유지합니다.
+4. **Frontend 배포**: 확인된 FE SHA를 빌드해 Cloudflare Worker `memme-fe`에 Wrangler로 배포합니다. GitHub Actions에는 Cloudflare API 토큰과 계정 ID가 필요합니다.
+5. **배포 기록**: Actions 요약에 소스 SHA·CI 실행 링크·배포 결과가 남고, Backend·AI는 EC2의 `runtime/current-deployment.json`에도 기록됩니다.
 
 자세한 실행 절차와 필요한 설정은 [CD 운영 가이드](docs/CD.md)를 참고하세요.
