@@ -5,7 +5,7 @@ services:
     ports:
       - "${PUBLIC_PORT:-8000}:80"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./.runtime.nginx.conf:/etc/nginx/nginx.conf:ro
       - ${STATE_DIR:-./runtime}:/etc/nginx/conf.d:ro
     networks: [internal]
 

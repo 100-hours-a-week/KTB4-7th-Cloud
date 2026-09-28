@@ -106,10 +106,8 @@ fi
 
 # Keep the bind mount on one inode across git checkouts. Git replaces tracked
 # files, which otherwise leaves the running nginx container with stale config.
-if [[ "${service}" == backend ]]; then
-  cat "${script_dir}/nginx/nginx.conf" > "${runtime_nginx_conf}"
-  chmod 644 "${runtime_nginx_conf}"
-fi
+cat "${script_dir}/nginx/nginx.conf" > "${runtime_nginx_conf}"
+chmod 644 "${runtime_nginx_conf}"
 
 write_runtime_env
 authenticate_ecr
