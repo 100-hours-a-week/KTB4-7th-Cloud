@@ -38,5 +38,3 @@ terraform -chdir=terraform/environments/prod apply change.tfplan
 ## 범위
 
 현재 운영 환경을 관리하는 코드입니다. Cloudflare와 서버 내부 Docker, Nginx, CloudWatch Agent 설정은 별도로 관리합니다. 일부 기존 자원 ID를 참조하므로 새로운 환경을 만들 때는 참조를 정리해야 합니다. RDS에서 EC2 MySQL로의 데이터 이전과 ECS 또는 Auto Scaling 구성은 아직 포함하지 않았습니다.
-
-검증 기록은 [VERIFICATION.md](VERIFICATION.md), 도입 과정은 [Terraform IaC Wiki](https://github.com/100-hours-a-week/KTB4-7th-Cloud/wiki/Terraform-IaC)에 있습니다.
