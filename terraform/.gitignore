@@ -1,0 +1,16 @@
+# Terraform local cache and generated files
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.plan
+crash.log
+crash.*.log
+terraform.tfvars
+*.auto.tfvars
+*.tfvars.json
+*.auto.tfvars.json
+*.tfvars.backup
+.terraform.tfstate.lock.info
+.env
+.env.*
