@@ -6,8 +6,8 @@
 
 | 실행 폴더 | 관리 대상 | 원격 state key |
 |---|---|---|
-| `environments/prod` | EC2, RDS, S3, 네트워크, IAM 등 기존 자원 46개 | `memme/prod/terraform.tfstate` |
-| `bootstrap` | 전용 state S3 버킷과 관련 설정 5개 | `memme/bootstrap/terraform.tfstate` |
+| `environments/prod` | EC2, RDS, S3, 네트워크, IAM 등 기존 자원 | `memme/prod/terraform.tfstate` |
+| `bootstrap` | 전용 state S3 버킷과 관련 설정 | `memme/bootstrap/terraform.tfstate` |
 
 운영 코드는 관리 영역별 파일로 나눴습니다. `imports.tf`는 기존 자원의 연결 기록이고, `backend.tf`는 이미 구성한 S3 원격 state를 사용합니다. 두 실행 폴더의 `.terraform.lock.hcl`을 함께 관리합니다.
 
