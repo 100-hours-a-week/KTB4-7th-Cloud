@@ -1,6 +1,6 @@
 # Terraform
 
-기존 Memme 운영 AWS 자원을 관리하는 Terraform 코드입니다. 2026년 10월 6일 기존 자원 46개를 import했고, 연결 후 plan에서 변경이 없음을 확인했습니다.
+기존 Memme 운영 AWS 자원을 관리하는 Terraform 코드입니다.
 
 ## 구성
 
