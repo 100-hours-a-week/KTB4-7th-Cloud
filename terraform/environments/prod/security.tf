@@ -1,4 +1,4 @@
-# Existing production resources; adoption only.
+# Existing production resources; ECS access uses the external task SG.
 
 resource "aws_security_group" "memme_db_sg" {
   description = "memme-db-sg"
@@ -31,6 +31,16 @@ resource "aws_security_group" "memme_db_sg" {
     prefix_list_ids  = []
     protocol         = "tcp"
     security_groups  = ["sg-0d99aedfebba0f029"]
+    self             = false
+    to_port          = 3306
+    }, {
+    cidr_blocks      = []
+    description      = ""
+    from_port        = 3306
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = ["sg-010fbd5aa0b0c5651"] # ECS Backend → MySQL 3306
     self             = false
     to_port          = 3306
   }]
@@ -186,6 +196,16 @@ resource "aws_security_group" "memme_ai_sg" {
     prefix_list_ids  = []
     protocol         = "tcp"
     security_groups  = ["sg-0d99aedfebba0f029"]
+    self             = false
+    to_port          = 8000
+    }, {
+    cidr_blocks      = []
+    description      = ""
+    from_port        = 8000
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = ["sg-010fbd5aa0b0c5651"] # ECS Backend → AI API 8000
     self             = false
     to_port          = 8000
   }]
