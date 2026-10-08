@@ -11,7 +11,7 @@ GitHub Actions의 **Deploy Backend ECS**를 main에서 수동 실행한다.
 | mode=rollback | 기록해 둔 정상 task definition으로 복구 |
 | task_definition | `memme-backend-v2:3`처럼 정확한 revision. 최신 이미지 재배포를 사용하지 않음 |
 
-정상 배포는 현재 태스크·ALB·업무 응답 확인 → 정상 revision 기록 → 이미지 digest 확인 → 새 revision 등록 → 서비스 갱신 → 태스크 2개와 ALB healthy 2개 확인 → 업무 응답 확인 순서다. 실패 시 Actions artifact의 `rollback_task_definition`을 확인한 뒤 rollback을 실행한다. Container health 성공만으로 업무 기능 성공을 판단하지 않는다.
+정상 배포는 현재 태스크·ALB·업무 응답 확인 → 정상 revision 기록 → 이미지 digest 확인 → 새 revision 등록 → 서비스 갱신 → 태스크 2개와 ALB healthy 2개 확인 → 업무 응답 확인 순서다. 실패 시 Actions artifact의 `rollback_task_definition`을 확인한 뒤 rollback을 실행한다. Container health 성공만으로 업무 기능 성공을 판단하지 않는다. `previous_task_definition`은 실행 전 revision이며 정상 여부를 보장하지 않는다. `rollback_task_definition`은 업무 응답까지 검증한 복구 기준에만 기록한다. 복구 실행이 실패하면 최초 배포 결과의 정상 revision을 기준으로 다시 판단한다.
 
 ```sh
 # 명시한 소스 commit의 이미지를 배포

@@ -35,12 +35,20 @@ class Aws:
         command = ['aws', namespace, operation, '--region', REGION, '--output', 'json', '--no-cli-pager']
         if parameters:
             command += ['--cli-input-json', json.dumps(parameters)]
-        result = subprocess.run(command, text=True, capture_output=True, timeout=90)
+        try:
+            result = subprocess.run(command, text=True, capture_output=True, timeout=90)
+        except subprocess.TimeoutExpired:
+            raise DeploymentError(f'{namespace}:{operation} timed out; inspect AWS state before retrying') from None
+        except OSError:
+            raise DeploymentError(f'{namespace}:{operation} transport failed') from None
         if result.returncode:
             # Never echo command payloads or raw AWS responses into CI logs.
             code = re.search(r'\((\w+)\)', result.stderr)
             raise DeploymentError(f'{namespace}:{operation} failed ({code.group(1) if code else "AWS_ERROR"})')
-        return json.loads(result.stdout)
+        try:
+            return json.loads(result.stdout)
+        except ValueError:
+            raise DeploymentError(f'{namespace}:{operation} returned invalid JSON') from None
 
 
 def definition_arn(value):
@@ -156,7 +164,12 @@ def business_smoke(aws, sleep, clock):
                 sleep(2); continue
             state = invocation.get('Status')
             if state == 'Success':
-                result = json.loads(invocation['StandardOutputContent'])
+                try:
+                    result = json.loads(invocation['StandardOutputContent'])
+                except ValueError:
+                    raise DeploymentError('Read-only business smoke returned invalid JSON') from None
+                if not isinstance(result, dict):
+                    raise DeploymentError('Read-only business smoke returned an invalid result')
                 results.append({'mode': mode, 'command': command, 'result': result})
                 if invocation.get('ResponseCode') != 0 or result.get('pass') is not True:
                     raise DeploymentError('Read-only business smoke failed')
@@ -188,7 +201,7 @@ def execute(mode, source_sha=None, revision=None, *, aws=None, sleep=time.sleep,
         before = get_service(aws)
         validate_service(before)
         baseline = definition_arn(before['taskDefinition'])
-        report['rollback_task_definition'] = baseline
+        report['previous_task_definition'] = baseline
         selected = revision if mode == 'rollback' else baseline
         td = aws.call('ecs', 'describe-task-definition', taskDefinition=selected)['taskDefinition']
         validate_definition(td)
@@ -201,6 +214,7 @@ def execute(mode, source_sha=None, revision=None, *, aws=None, sleep=time.sleep,
                 raise DeploymentError('Finish the current deployment before deploying another candidate')
             report['baseline_runtime'] = wait_healthy(aws, baseline, digest, before, started + timeout, sleep, clock)
             report['baseline_smoke'] = business_smoke(aws, sleep, clock)
+            report['rollback_task_definition'] = baseline
             images = aws.call('ecr', 'describe-images', repositoryName='memme/backend',
                               imageIds=[{'imageTag': source_sha}])['imageDetails']
             if len(images) != 1 or source_sha not in images[0].get('imageTags', []):
@@ -215,6 +229,8 @@ def execute(mode, source_sha=None, revision=None, *, aws=None, sleep=time.sleep,
         aws.call('ecs', 'update-service', cluster=CLUSTER, service=SERVICE, taskDefinition=target)
         report['runtime'] = wait_healthy(aws, target, digest, before, started + timeout, sleep, clock)
         report['smoke'] = business_smoke(aws, sleep, clock)
+        if mode == 'rollback':
+            report['rollback_task_definition'] = target
         report.update(status='PASS', elapsed_seconds=round(clock() - started, 1))
         return report
     except DeploymentError as error:

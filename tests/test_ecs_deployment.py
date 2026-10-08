@@ -3,6 +3,8 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+import subprocess
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'deploy/ecs/deploy_backend.py'
 MODULE = None
@@ -172,6 +174,56 @@ class EcsDeploymentTests(unittest.TestCase):
             MODULE.execute('deploy', SHA, None, aws=aws, sleep=lambda _: None,
                            clock=lambda: next(ticks), timeout=20)
         self.assertFalse(any(op == 'send-command' for _, op, _ in aws.calls))
+
+    def test_cli_transport_and_parse_failures_do_not_expose_payloads(self):
+        for failure in [subprocess.TimeoutExpired(['sensitive-payload'], 90),
+                        OSError('sensitive-payload')]:
+            with patch.object(MODULE.subprocess, 'run', side_effect=failure):
+                with self.assertRaises(MODULE.DeploymentError) as failed:
+                    MODULE.Aws().call('ecs', 'describe-services', cluster='memme-v2')
+                self.assertNotIn('sensitive-payload', str(failed.exception))
+        with patch.object(MODULE.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, 'sensitive-payload', '')):
+            with self.assertRaises(MODULE.DeploymentError) as failed:
+                MODULE.Aws().call('ecs', 'describe-services')
+            self.assertNotIn('sensitive-payload', str(failed.exception))
+
+    def test_post_update_timeout_keeps_recorded_recovery_revision(self):
+        aws = FakeAws(); original = aws.call
+        def call(namespace, operation, **parameters):
+            if operation == 'describe-services' and aws.current == NEW:
+                return MODULE.Aws().call(namespace, operation, **parameters)
+            return original(namespace, operation, **parameters)
+        aws.call = call
+        with patch.object(MODULE.subprocess, 'run', side_effect=subprocess.TimeoutExpired(['sensitive-payload'], 90)):
+            with self.assertRaises(MODULE.DeploymentError) as failed:
+                MODULE.execute('deploy', SHA, None, aws=aws)
+        self.assertEqual(aws.current, NEW)
+        self.assertEqual(failed.exception.report['rollback_task_definition'], OLD)
+        self.assertEqual(failed.exception.report['task_definition'], NEW)
+        self.assertNotIn('sensitive-payload', json.dumps(failed.exception.report))
+
+    def test_malformed_smoke_result_preserves_report_without_response_body(self):
+        aws = FakeAws(); original = aws.call
+        def call(namespace, operation, **parameters):
+            result = original(namespace, operation, **parameters)
+            if operation == 'get-command-invocation' and aws.current == NEW:
+                result['StandardOutputContent'] = 'sensitive-payload'
+            return result
+        aws.call = call
+        with self.assertRaises(MODULE.DeploymentError) as failed:
+            MODULE.execute('deploy', SHA, None, aws=aws)
+        self.assertEqual(failed.exception.report['rollback_task_definition'], OLD)
+        self.assertNotIn('sensitive-payload', json.dumps(failed.exception.report))
+
+    def test_rollback_report_does_not_recommend_the_failed_candidate(self):
+        aws = FakeAws(); aws.current = NEW
+        result = MODULE.execute('rollback', None, OLD, aws=aws)
+        self.assertEqual(result['previous_task_definition'], NEW)
+        self.assertEqual(result['rollback_task_definition'], OLD)
+        broken = FakeAws(broken_baseline=True)
+        with self.assertRaises(MODULE.DeploymentError) as failed:
+            MODULE.execute('deploy', SHA, None, aws=broken)
+        self.assertNotIn('rollback_task_definition', failed.exception.report)
 
     def test_circuit_breaker_return_to_old_revision_is_not_candidate_success(self):
         aws = FakeAws(); original = aws.call
