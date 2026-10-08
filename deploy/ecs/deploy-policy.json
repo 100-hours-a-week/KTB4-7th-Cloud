@@ -1,0 +1,123 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ManageOnlyBackendTaskFamily",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:RegisterTaskDefinition",
+        "ecs:TagResource"
+      ],
+      "Resource": "arn:aws:ecs:ap-northeast-2:613538400341:task-definition/memme-backend-v2:*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/Project": "memme",
+          "aws:RequestTag/Service": "memme-backend-v2"
+        }
+      }
+    },
+    {
+      "Sid": "UpdateOnlyBackendService",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:UpdateService"
+      ],
+      "Resource": "arn:aws:ecs:ap-northeast-2:613538400341:service/memme-v2/memme-backend-v2",
+      "Condition": {
+        "ArnEquals": {
+          "ecs:cluster": "arn:aws:ecs:ap-northeast-2:613538400341:cluster/memme-v2"
+        },
+        "ArnLike": {
+          "ecs:task-definition": "arn:aws:ecs:ap-northeast-2:613538400341:task-definition/memme-backend-v2:*"
+        }
+      }
+    },
+    {
+      "Sid": "ReadBackendService",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeServices"
+      ],
+      "Resource": "arn:aws:ecs:ap-northeast-2:613538400341:service/memme-v2/memme-backend-v2"
+    },
+    {
+      "Sid": "ReadBackendTasks",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeTasks"
+      ],
+      "Resource": "arn:aws:ecs:ap-northeast-2:613538400341:task/memme-v2/*",
+      "Condition": {
+        "ArnEquals": {
+          "ecs:cluster": "arn:aws:ecs:ap-northeast-2:613538400341:cluster/memme-v2"
+        }
+      }
+    },
+    {
+      "Sid": "ListBackendClusterTasks",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:ListTasks"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "ArnEquals": {
+          "ecs:cluster": "arn:aws:ecs:ap-northeast-2:613538400341:cluster/memme-v2"
+        }
+      }
+    },
+    {
+      "Sid": "ReadDefinitionAndTargetHealth",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeTaskDefinition",
+        "elasticloadbalancing:DescribeTargetHealth"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadBackendImageIdentity",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:DescribeImages"
+      ],
+      "Resource": "arn:aws:ecr:ap-northeast-2:613538400341:repository/memme/backend"
+    },
+    {
+      "Sid": "PassOnlyBackendRuntimeRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::613538400341:role/MemmeBackendV2TaskRole",
+        "arn:aws:iam::613538400341:role/MemmeBackendV2ExecutionRole"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "ecs-tasks.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "RunOnlyFixedReadOnlySmoke",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:SendCommand"
+      ],
+      "Resource": [
+        "arn:aws:ssm:ap-northeast-2:613538400341:document/MemmeECSBackendSmoke",
+        "arn:aws:ec2:ap-northeast-2:613538400341:instance/i-0ffc5f41db72dac30",
+        "arn:aws:ec2:ap-northeast-2:613538400341:instance/i-06c4c159ed4155c70"
+      ]
+    },
+    {
+      "Sid": "ReadSmokeCommandResult",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetCommandInvocation"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
