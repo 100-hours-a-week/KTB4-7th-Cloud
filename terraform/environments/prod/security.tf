@@ -174,7 +174,7 @@ resource "aws_security_group" "memme_ai_sg" {
     ipv6_cidr_blocks = []
     prefix_list_ids  = []
     protocol         = "tcp"
-    security_groups  = ["sg-0d99aedfebba0f029"]
+    security_groups  = ["sg-0d99aedfebba0f029", "sg-010fbd5aa0b0c5651"] # 기존 EC2 + ECS 내부 API 8080
     self             = false
     to_port          = 8080
     }, {
