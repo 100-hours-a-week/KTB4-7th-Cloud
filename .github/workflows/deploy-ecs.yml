@@ -1,0 +1,73 @@
+name: Deploy Backend ECS
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Deploy an explicit image or restore a recorded revision
+        required: true
+        type: choice
+        options: [deploy, rollback]
+      source_sha:
+        description: Backend source SHA already published by CI (deploy only)
+        required: false
+        type: string
+        default: '2ba823ded25a10e5b58d144cfca4be4916105ab5'
+      task_definition:
+        description: Recorded memme-backend-v2 revision (rollback only)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+# Serialize Backend EC2 and ECS deployments using the existing CD group.
+concurrency:
+  group: cd-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Test deployment and recovery guards
+        run: python3 -m unittest discover -s tests -v
+      - name: Configure ECS deployment credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::613538400341:role/GitHubActionsBackendECSDeployRole
+          aws-region: ap-northeast-2
+      - name: Deploy or restore Backend ECS
+        env:
+          MODE: ${{ inputs.mode }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          TASK_DEFINITION: ${{ inputs.task_definition }}
+        shell: bash
+        run: |
+          case "$MODE" in
+            deploy)
+              python3 deploy/ecs/deploy_backend.py deploy --source-sha "$SOURCE_SHA"
+              ;;
+            rollback)
+              python3 deploy/ecs/deploy_backend.py rollback --task-definition "$TASK_DEFINITION"
+              ;;
+            *) exit 2 ;;
+          esac
+      - name: Preserve deployment result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecs-deployment-${{ github.run_id }}
+          path: ecs-deployment-result.json
+          if-no-files-found: warn
+          retention-days: 14
