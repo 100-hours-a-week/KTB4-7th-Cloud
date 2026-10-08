@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "2.2",
+  "description": "Read-only Memme ECS health, CORS, access boundary and QA fixture query; no credentials or business writes",
+  "parameters": {
+    "Mode": {
+      "type": "String",
+      "description": "public from Backend EC2; private from AI EC2",
+      "allowedValues": [
+        "public",
+        "private"
+      ],
+      "allowedPattern": "^(public|private)$"
+    }
+  },
+  "mainSteps": [
+    {
+      "action": "aws:runShellScript",
+      "name": "readOnlyBackendSmoke",
+      "inputs": {
+        "runCommand": [
+          "python3 - '{{ Mode }}' <<'MEMME_ECS_SMOKE'\nimport json,sys,urllib.request,urllib.error\nmode=sys.argv[1];rows=[]\nif mode=='public':\n base='http://memme-v2-alb-1413087381.ap-northeast-2.elb.amazonaws.com'\n cases=[('health','GET','/health',200,{}),('csrf','GET','/v1/auth/csrf-token',204,{'Origin':'https://memme.kr'}),('unauth_profile','GET','/v1/users/me',401,{}),('public_internal','GET','/internal/v1/sales/summary',403,{}),('cors','OPTIONS','/v1/auth/login',200,{'Origin':'https://memme.kr','Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'content-type,x-xsrf-token'})]\nelse:\n base='http://backend.memme.internal:8080'\n cases=[('ecs_sales_summary','GET','/internal/v1/sales/summary?storeId=1&period=CUSTOM&startDate=2026-01-01&endDate=2026-01-02',200,{})]\nfor name,method,path,status,headers in cases:\n try:\n  try:r=urllib.request.urlopen(urllib.request.Request(base+path,headers=headers,method=method),timeout=8)\n  except urllib.error.HTTPError as e:r=e\n  row={'name':name,'status':r.code,'expected':status,'pass':r.code==status}\n  if name=='cors':row['pass']=row['pass'] and r.headers.get('Access-Control-Allow-Origin')=='https://memme.kr' and r.headers.get('Access-Control-Allow-Credentials')=='true'\n  if name=='ecs_sales_summary':row['data_nonempty']=bool(json.loads(r.read()).get('data'));row['pass']=row['pass'] and row['data_nonempty']\n  r.close();rows.append(row)\n except Exception as e:rows.append({'name':name,'pass':False,'error_type':type(e).__name__})\nprint(json.dumps({'mode':mode,'pass':all(x['pass'] for x in rows),'cases':rows}))\nMEMME_ECS_SMOKE"
+        ],
+        "timeoutSeconds": "60"
+      }
+    }
+  ]
+}
