@@ -275,7 +275,7 @@ resource "aws_iam_role_policy" "githubactionsclouddeployrole_memmeclouddeploymen
       }, {
       Action   = "ssm:SendCommand"
       Effect   = "Allow"
-      Resource = ["arn:aws:ssm:ap-northeast-2::document/AWS-RunShellScript", "arn:aws:ec2:ap-northeast-2:613538400341:instance/i-0ffc5f41db72dac30", "arn:aws:ec2:ap-northeast-2:613538400341:instance/i-06c4c159ed4155c70"]
+      Resource = ["arn:aws:ssm:ap-northeast-2::document/AWS-RunShellScript", "arn:aws:ec2:ap-northeast-2:613538400341:instance/i-06c4c159ed4155c70"]
       Sid      = "DeployOnlyToMemmeInstances"
       }, {
       Action   = "ssm:GetCommandInvocation"
