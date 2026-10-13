@@ -56,18 +56,8 @@ import {
 }
 
 import {
-  to = aws_instance.backend_server
-  id = "i-0ffc5f41db72dac30"
-}
-
-import {
   to = aws_instance.ai_server
   id = "i-06c4c159ed4155c70"
-}
-
-import {
-  to = aws_eip.eipalloc_0abbf41bc8c1db381
-  id = "eipalloc-0abbf41bc8c1db381"
 }
 
 import {

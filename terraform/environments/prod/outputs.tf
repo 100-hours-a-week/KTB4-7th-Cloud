@@ -1,6 +1,3 @@
-output "backend_instance_id" {
-  value = aws_instance.backend_server.id
-}
 output "ai_instance_id" {
   value = aws_instance.ai_server.id
 }
