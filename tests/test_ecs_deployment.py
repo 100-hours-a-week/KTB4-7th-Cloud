@@ -146,6 +146,20 @@ class EcsDeploymentTests(unittest.TestCase):
         self.assertTrue(all(p['DocumentName'] == 'MemmeECSBackendSmoke' and p['DocumentVersion'] == '1' for p in smokes))
         self.assertTrue(all('commands' not in p['Parameters'] for p in smokes))
 
+    def test_deploy_keeps_both_smokes_when_v1_backend_is_retired(self):
+        aws = FakeAws(); original = aws.call
+        def call(namespace, operation, **parameters):
+            if operation == 'send-command' and parameters['InstanceIds'] != ['i-06c4c159ed4155c70']:
+                raise MODULE.DeploymentError('ssm:send-command failed (InvalidInstanceId)')
+            return original(namespace, operation, **parameters)
+        aws.call = call
+        result = MODULE.execute('deploy', SHA, None, aws=aws)
+        self.assertEqual(result['status'], 'PASS')
+        smokes = [p for _, op, p in aws.calls if op == 'send-command']
+        self.assertEqual([p['Parameters']['Mode'] for p in smokes],
+                         [['public'], ['private'], ['public'], ['private']])
+        self.assertTrue(all(p['DocumentVersion'] == '1' for p in smokes))
+
     def test_healthy_deployment_with_failed_business_smoke_is_failure(self):
         aws = FakeAws(functional_failure=True)
         with self.assertRaises(MODULE.DeploymentError) as failed:

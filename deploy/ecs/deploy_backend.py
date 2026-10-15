@@ -150,7 +150,7 @@ def wait_healthy(aws, target, digest, before, deadline, sleep, clock):
 
 def business_smoke(aws, sleep, clock):
     results = []
-    for mode, instance in [('public', 'i-0ffc5f41db72dac30'), ('private', 'i-06c4c159ed4155c70')]:
+    for mode, instance in [('public', 'i-06c4c159ed4155c70'), ('private', 'i-06c4c159ed4155c70')]:
         command = aws.call('ssm', 'send-command', DocumentName='MemmeECSBackendSmoke', DocumentVersion='1',
                            InstanceIds=[instance], Parameters={'Mode': [mode]}, TimeoutSeconds=60,
                            Comment='Read-only Backend ECS business smoke')['Command']['CommandId']
