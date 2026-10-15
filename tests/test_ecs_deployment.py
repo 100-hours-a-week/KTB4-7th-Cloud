@@ -143,7 +143,7 @@ class EcsDeploymentTests(unittest.TestCase):
         self.assertEqual(set(update), {'cluster', 'service', 'taskDefinition'})
         smokes = [p for _, op, p in aws.calls if op == 'send-command']
         self.assertEqual(len(smokes), 4)
-        self.assertTrue(all(p['DocumentName'] == 'MemmeECSBackendSmoke' and p['DocumentVersion'] == '1' for p in smokes))
+        self.assertTrue(all(p['DocumentName'] == 'MemmeECSBackendSmoke' and p['DocumentVersion'] == '2' for p in smokes))
         self.assertTrue(all('commands' not in p['Parameters'] for p in smokes))
 
     def test_deploy_keeps_both_smokes_when_v1_backend_is_retired(self):
@@ -158,7 +158,7 @@ class EcsDeploymentTests(unittest.TestCase):
         smokes = [p for _, op, p in aws.calls if op == 'send-command']
         self.assertEqual([p['Parameters']['Mode'] for p in smokes],
                          [['public'], ['private'], ['public'], ['private']])
-        self.assertTrue(all(p['DocumentVersion'] == '1' for p in smokes))
+        self.assertTrue(all(p['DocumentVersion'] == '2' for p in smokes))
 
     def test_healthy_deployment_with_failed_business_smoke_is_failure(self):
         aws = FakeAws(functional_failure=True)

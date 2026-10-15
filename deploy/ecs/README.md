@@ -26,9 +26,9 @@ python3 deploy/ecs/deploy_backend.py rollback --task-definition memme-backend-v2
 
 `GitHubActionsBackendECSDeployRole`은 기존 IaC 관리 역할을 수정하지 않고 별도로 구성한다. `trust-policy.json`은 현재 Cloud 배포 역할의 production/main OIDC 조건을 복사한 값이다. `deploy-policy.json`은 Backend task family·서비스 갱신, 지정한 런타임 역할 2개 PassRole, 이미지·상태 조회를 허용한다. ECS 태스크 중지와 네트워크·Secrets·IAM 변경 권한은 포함하지 않는다.
 
-`smoke-document.json`으로 `MemmeECSBackendSmoke` Command 문서 version 1을 생성한다. 배포 역할은 이 고정 문서만 기존 Backend/AI EC2 두 곳에서 실행할 수 있다. 임의 shell 명령은 입력받지 않는다. 문서 자체 변경은 배포 역할에서 허용하지 않는다.
+`smoke-document.json`으로 `MemmeECSBackendSmoke` Command 문서 version 2을 생성한다. 배포 역할은 이 고정 문서만 기존 허용 대상인 AI EC2에서 실행한다. 임의 shell 명령은 입력받지 않는다. 문서 자체 변경은 배포 역할에서 허용하지 않는다.
 
-public 검사는 ECS ALB의 health·CSRF·미인증 응답·내부 API 차단·CORS를 확인한다. private 검사는 AI 서버에서 `backend.memme.internal`의 기존 QA 매출 fixture를 조회한다. 모두 읽기 작업이며 인증 정보·응답 본문은 로그에 남기지 않는다. 로그인·S3·AI·SSE 전체 기능 검증을 대신하지 않으며, 이 항목들은 별도 기능 검증 및 배포 교체 중 검증 결과와 함께 판단한다.
+public 검사는 https://api.memme.kr의 health·CSRF·미인증 응답·내부 API 차단·CORS를 확인한다. private 검사는 AI 서버에서 `backend.memme.internal`의 기존 QA 매출 fixture를 조회한다. 모두 읽기 작업이며 인증 정보·응답 본문은 로그에 남기지 않는다. 로그인·S3·AI·SSE 전체 기능 검증을 대신하지 않으며, 이 항목들은 별도 기능 검증 및 배포 교체 중 검증 결과와 함께 판단한다.
 
 ## 검증 시 주의
 
