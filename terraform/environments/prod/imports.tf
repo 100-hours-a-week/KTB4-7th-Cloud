@@ -60,10 +60,6 @@ import {
   id = "i-06c4c159ed4155c70"
 }
 
-import {
-  to = aws_db_instance.memme_mysql
-  id = "memme-mysql"
-}
 
 import {
   to = aws_db_subnet_group.memme_db_subnet_group
