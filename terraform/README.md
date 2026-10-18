@@ -37,3 +37,11 @@ terraform -chdir=terraform/environments/prod apply change.tfplan
 ## V1 Backend 정리 (2026-10-13)
 
 운영 Backend를 ECS로 전환한 뒤 사용하지 않는 V1 Backend EC2와 고정 IP를 삭제했습니다. 해당 resource, import, output 및 배포 IAM 정책의 이전 EC2 참조를 제거했습니다. 원격 state에서는 `aws_instance.backend_server`와 `aws_eip.eipalloc_0abbf41bc8c1db381`만 제거합니다. AI, RDS와 나머지 자원은 유지합니다. 과거 checkout으로 Terraform을 실행하지 말고 이 변경이 반영된 코드를 사용하세요.
+
+## 기존 RDS 관리 종료 (2026-10-18)
+
+운영 DB를 EC2 MySQL로 전환한 뒤 기존 `memme-mysql`을 폐기합니다. 최종 암호화 수동 스냅샷 `memme-mysql-retirement-20261018`과 기존 수동 스냅샷은 보존합니다. 이 보존본에는 EC2 전환 후 새 데이터가 포함되지 않습니다.
+
+`aws_db_instance.memme_mysql`만 resource/import/output 및 원격 state에서 제외합니다. `removed` 블록의 `destroy = false`는 Terraform에서 원본을 다시 삭제하거나 생성하지 않도록 관리 종료를 명시합니다. RDS 서브넷 그룹·보안 그룹·KMS 키와 나머지 기존 자원은 유지합니다. 과거 RDS resource가 남아 있는 checkout으로 Terraform을 실행하면 재생성될 수 있으므로 이 변경이 반영된 코드를 사용하세요.
+
+실제 운영 EC2 MySQL·ECS·Redis·control은 이번 관리 제외 대상이 아닙니다. 전체 Terraform apply나 백엔드 사양 변경은 수행하지 않습니다.
