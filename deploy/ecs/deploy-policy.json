@@ -8,11 +8,14 @@
         "ecs:RegisterTaskDefinition",
         "ecs:TagResource"
       ],
-      "Resource": "arn:aws:ecs:ap-northeast-2:613538400341:task-definition/memme-backend-v2:*",
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-2:613538400341:task-definition/memme-backend-v2:*",
+        "arn:aws:ecs:ap-northeast-2:613538400341:task-definition/memme-backend-batch-v2:*"
+      ],
       "Condition": {
         "StringEquals": {
           "aws:RequestTag/Project": "memme",
-          "aws:RequestTag/Service": "memme-backend-v2"
+          "aws:RequestTag/Service": ["memme-backend-v2", "memme-backend-batch-v2"]
         }
       }
     },
@@ -33,12 +36,31 @@
       }
     },
     {
+      "Sid": "UpdateOnlyBackendBatchService",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:UpdateService"
+      ],
+      "Resource": "arn:aws:ecs:ap-northeast-2:613538400341:service/memme-v2/memme-backend-batch-v2",
+      "Condition": {
+        "ArnEquals": {
+          "ecs:cluster": "arn:aws:ecs:ap-northeast-2:613538400341:cluster/memme-v2"
+        },
+        "ArnLike": {
+          "ecs:task-definition": "arn:aws:ecs:ap-northeast-2:613538400341:task-definition/memme-backend-batch-v2:*"
+        }
+      }
+    },
+    {
       "Sid": "ReadBackendService",
       "Effect": "Allow",
       "Action": [
         "ecs:DescribeServices"
       ],
-      "Resource": "arn:aws:ecs:ap-northeast-2:613538400341:service/memme-v2/memme-backend-v2"
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-2:613538400341:service/memme-v2/memme-backend-v2",
+        "arn:aws:ecs:ap-northeast-2:613538400341:service/memme-v2/memme-backend-batch-v2"
+      ]
     },
     {
       "Sid": "ReadBackendTasks",
@@ -107,7 +129,6 @@
       ],
       "Resource": [
         "arn:aws:ssm:ap-northeast-2:613538400341:document/MemmeECSBackendSmoke",
-        "arn:aws:ec2:ap-northeast-2:613538400341:instance/i-0ffc5f41db72dac30",
         "arn:aws:ec2:ap-northeast-2:613538400341:instance/i-06c4c159ed4155c70"
       ]
     },

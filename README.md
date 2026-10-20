@@ -7,7 +7,8 @@
 ```text
 .github/
 └── workflows/
-    └── deploy.yml                  # Backend·AI 공통 수동 CD (GitHub OIDC → AWS SSM)
+    ├── deploy.yml                  # AI·Frontend 수동 CD (AI: OIDC → SSM Blue/Green)
+    └── deploy-ecs.yml              # Backend ECS 웹·배치 수동 CD 및 복구
 
 deploy/                             # 서비스별 운영 배포 설정
 ├── backend/
