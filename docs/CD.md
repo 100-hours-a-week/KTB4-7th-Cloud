@@ -4,7 +4,7 @@ CI는 각 서비스 저장소의 `dev` push에서 테스트와 이미지 빌드�
 
 | 서비스 | 실행 환경 | 배포 방식 | 워크플로 |
 | --- | --- | --- | --- |
-| Backend 웹 | ECS Fargate 태스크 2개, ALB | Rolling (100/150, circuit breaker rollback) | `Deploy Backend ECS` |
+| Backend 웹 | ECS Fargate 태스크 2개, ALB | Rolling (100/200, circuit breaker rollback) | `Deploy Backend ECS` |
 | Backend 배치 | ECS Fargate 태스크 1개, ALB 미등록 | 교체 (0/100, 기존 태스크 중지 후 시작) | `Deploy Backend ECS` |
 | AI | EC2 1대 | 같은 EC2 안 Blue/Green | `Deploy service` (`ai`) |
 | Frontend | Cloudflare Workers `memme-fe` | Workers 배포 | `Deploy service` (`frontend`) |
@@ -16,7 +16,7 @@ V1 Backend EC2는 폐기했다. `Deploy service`에서 `backend` 선택지를 �
 절차와 입력은 [deploy/ecs/README.md](../deploy/ecs/README.md)를 따른다. 요약은 다음과 같다.
 
 1. `target=all`이면 웹을 먼저 배포하고, 웹의 태스크·ALB·업무 응답 검사가 모두 통과한 뒤에만 같은 SHA로 배치를 배포한다.
-2. 웹은 ECS가 새 태스크를 하나 띄워 ALB healthy를 확인한 뒤 기존 태스크를 하나 빼는 방식으로 한 개씩 교체한다. 기존 태스크는 ALB deregistration delay 동안 진행 중 요청을 마친다.
+2. 웹은 ECS가 새 태스크 2개를 함께 띄워 ALB healthy를 확인한 뒤 기존 태스크를 뺀다. 기존 태스크는 ALB deregistration delay(30초) 동안 진행 중 요청을 마친다. 대상 그룹 health check는 10초 간격, 연속 2회다.
 3. 배치는 스케줄러를 단독으로 소유하므로 두 개가 동시에 돌지 않도록 0/100을 유지한다. 배포 중 잠깐 배치 태스크가 없는 구간이 생긴다.
 4. 롤백은 대상 하나씩, 결과 artifact에 기록된 `rollback_task_definition`으로만 한다.
 

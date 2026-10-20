@@ -52,7 +52,7 @@ class FakeAws:
         if operation == 'describe-services':
             return {'services': [{'serviceArn': f'arn:aws:ecs:ap-northeast-2:{ACCOUNT}:service/memme-v2/memme-backend-v2',
                 'taskDefinition': self.current, 'desiredCount': 2, 'runningCount': 2, 'pendingCount': 0,
-                'deploymentConfiguration': {'minimumHealthyPercent': 100, 'maximumPercent': 150,
+                'deploymentConfiguration': {'minimumHealthyPercent': 100, 'maximumPercent': 200,
                     'deploymentCircuitBreaker': {'enable': True, 'rollback': True}},
                 'serviceRegistries': [{'registryArn': 'unchanged-discovery'}],
                 'loadBalancers': [{'targetGroupArn': 'target-group', 'containerName': 'backend', 'containerPort': 8080}],
