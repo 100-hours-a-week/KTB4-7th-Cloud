@@ -11,10 +11,10 @@ from pathlib import Path
 ACCOUNT = '613538400341'
 REGION = 'ap-northeast-2'
 CLUSTER = 'memme-v2'
-# web: ALB behind, rolling one task at a time with surge (100/150) and circuit-breaker rollback.
+# web: ALB behind, both replacement tasks start together (100/200); old tasks leave only after the new ones are healthy.
 # batch: single scheduler owner, never overlapping (0/100), no ALB or service discovery.
 TARGETS = {
-    'web': {'service': 'memme-backend-v2', 'desired': 2, 'min': 100, 'max': 150, 'public': True},
+    'web': {'service': 'memme-backend-v2', 'desired': 2, 'min': 100, 'max': 200, 'public': True},
     'batch': {'service': 'memme-backend-batch-v2', 'desired': 1, 'min': 0, 'max': 100, 'public': False},
 }
 IMAGE_PREFIX = f'{ACCOUNT}.dkr.ecr.{REGION}.amazonaws.com/memme/backend@'

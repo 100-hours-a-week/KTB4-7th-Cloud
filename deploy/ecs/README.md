@@ -24,7 +24,7 @@ python3 deploy/ecs/deploy_backend.py rollback --target web --task-definition mem
 python3 deploy/ecs/deploy_backend.py rollback --target batch --task-definition memme-backend-batch-v2:7
 ```
 
-웹은 서비스의 desired=2, rolling=100/150, circuit-breaker rollback, ALB·Cloud Map 연결을 확인한다. 서비스 갱신은 taskDefinition만 전달한다. Secrets·네트워크·운영 AI 주소는 변경하지 않으며, ECS 웹 태스크의 스케줄러와 QA 시딩은 계속 비활성화한다. `cd-backend` concurrency로 Backend 배포를 한 번에 하나만 실행한다.
+웹은 서비스의 desired=2, rolling=100/200, circuit-breaker rollback, ALB·Cloud Map 연결을 확인한다. 서비스 갱신은 taskDefinition만 전달한다. Secrets·네트워크·운영 AI 주소는 변경하지 않으며, ECS 웹 태스크의 스케줄러와 QA 시딩은 계속 비활성화한다. `cd-backend` concurrency로 Backend 배포를 한 번에 하나만 실행한다.
 
 ## 배치
 
