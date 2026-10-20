@@ -7,7 +7,7 @@ on:
         description: Service to deploy
         required: true
         type: choice
-        options: [backend, ai, frontend]
+        options: [ai, frontend]
 
 permissions:
   contents: read
@@ -39,12 +39,8 @@ jobs:
         id: target
         shell: bash
         run: |
+          # Backend runs on ECS since V2; use the Deploy Backend ECS workflow.
           case '${{ inputs.service }}' in
-            backend)
-              echo 'instance_id=${{ vars.BACKEND_INSTANCE_ID }}' >> "$GITHUB_OUTPUT"
-              echo 'repository=${{ vars.BACKEND_ECR_REPOSITORY }}' >> "$GITHUB_OUTPUT"
-              echo 'secret_id=${{ vars.BACKEND_RUNTIME_SECRET_ID }}' >> "$GITHUB_OUTPUT"
-              ;;
             ai)
               echo 'instance_id=${{ vars.AI_INSTANCE_ID }}' >> "$GITHUB_OUTPUT"
               echo 'repository=${{ vars.AI_ECR_REPOSITORY }}' >> "$GITHUB_OUTPUT"

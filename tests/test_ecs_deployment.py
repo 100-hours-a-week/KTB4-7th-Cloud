@@ -251,5 +251,111 @@ class EcsDeploymentTests(unittest.TestCase):
         self.assertEqual(sum(op == 'send-command' for _, op, _ in aws.calls), 2)
 
 
+
+BATCH_PREFIX = f'arn:aws:ecs:ap-northeast-2:{ACCOUNT}:task-definition/memme-backend-batch-v2:'
+BOLD, BNEW = BATCH_PREFIX + '7', BATCH_PREFIX + '8'
+
+
+def batch_definition(arn=BOLD, health=True):
+    td = definition(arn)
+    td['family'] = 'memme-backend-batch-v2'
+    container = td['containerDefinitions'][0]
+    container['environment'] = [{'name': n, 'value': '0 0 0 * * *'} for n in CRONS]
+    if not health:
+        container.pop('healthCheck')
+    return td
+
+
+class FakeBatchAws(FakeAws):
+    """Single scheduler owner: desired1, 0/100, no ALB or discovery."""
+
+    def __init__(self, maximum=100, health=True, health_status='HEALTHY', **kwargs):
+        super().__init__(**kwargs)
+        self.current = BOLD
+        self.definitions = {BOLD: batch_definition(health=health)}
+        self.maximum = maximum
+        self.health_status = health_status
+
+    def call(self, namespace, operation, **p):
+        if operation == 'describe-services' and p.get('services') == ['memme-backend-batch-v2']:
+            self.calls.append((namespace, operation, copy.deepcopy(p)))
+            return {'services': [{'serviceArn': f'arn:aws:ecs:ap-northeast-2:{ACCOUNT}:service/memme-v2/memme-backend-batch-v2',
+                'taskDefinition': self.current, 'desiredCount': 1, 'runningCount': 1, 'pendingCount': 0,
+                'deploymentConfiguration': {'minimumHealthyPercent': 0, 'maximumPercent': self.maximum},
+                'loadBalancers': [], 'serviceRegistries': [],
+                'deployments': [{'status': 'PRIMARY', 'rolloutState': 'COMPLETED', 'taskDefinition': self.current}]}]}
+        if operation == 'register-task-definition':
+            self.calls.append((namespace, operation, copy.deepcopy(p)))
+            self.definitions[BNEW] = {**copy.deepcopy(p), 'taskDefinitionArn': BNEW, 'status': 'ACTIVE'}
+            return {'taskDefinition': {'taskDefinitionArn': BNEW}}
+        if operation == 'describe-tasks':
+            self.calls.append((namespace, operation, copy.deepcopy(p)))
+            return {'tasks': [{'taskArn': 'batch1', 'lastStatus': 'RUNNING', 'healthStatus': self.health_status,
+                'taskDefinitionArn': self.current, 'containers': [{'imageDigest': DIGEST}]}]}
+        if operation == 'list-tasks':
+            self.calls.append((namespace, operation, copy.deepcopy(p)))
+            return {'taskArns': ['batch1']}
+        return super().call(namespace, operation, **p)
+
+
+class EcsBatchDeploymentTests(unittest.TestCase):
+    def test_batch_deploy_registers_batch_family_without_alb_or_smoke(self):
+        aws = FakeBatchAws()
+        result = MODULE.execute('deploy', SHA, None, kind='batch', aws=aws)
+        self.assertEqual(result['status'], 'PASS')
+        self.assertEqual(result['task_definition'], BNEW)
+        self.assertEqual(result['rollback_task_definition'], BOLD)
+        register = next(p for _, op, p in aws.calls if op == 'register-task-definition')
+        self.assertEqual(register['family'], 'memme-backend-batch-v2')
+        self.assertIn({'key': 'Service', 'value': 'memme-backend-batch-v2'}, register['tags'])
+        update = next(p for _, op, p in aws.calls if op == 'update-service')
+        self.assertEqual(update['service'], 'memme-backend-batch-v2')
+        self.assertFalse(any(op in ['send-command', 'describe-target-health'] for _, op, _ in aws.calls))
+
+    def test_batch_refuses_overlapping_scheduler_configuration(self):
+        aws = FakeBatchAws(maximum=200)
+        with self.assertRaises(MODULE.DeploymentError):
+            MODULE.execute('deploy', SHA, None, kind='batch', aws=aws)
+        self.assertFalse(any(op in ['register-task-definition', 'update-service'] for _, op, _ in aws.calls))
+
+    def test_batch_with_health_check_never_accepts_unknown_health(self):
+        aws = FakeBatchAws(health_status='UNKNOWN'); ticks = iter(range(0, 1000, 10))
+        with self.assertRaises(MODULE.DeploymentError):
+            MODULE.execute('deploy', SHA, None, kind='batch', aws=aws, sleep=lambda _: None,
+                           clock=lambda: next(ticks), timeout=20)
+        self.assertFalse(any(op == 'update-service' for _, op, _ in aws.calls))
+
+    def test_batch_without_health_check_accepts_running_task(self):
+        aws = FakeBatchAws(health=False, health_status='UNKNOWN')
+        self.assertEqual(MODULE.execute('deploy', SHA, None, kind='batch', aws=aws)['status'], 'PASS')
+
+    def test_batch_rollback_rejects_web_revision(self):
+        aws = FakeBatchAws()
+        with self.assertRaises(MODULE.DeploymentError):
+            MODULE.execute('rollback', None, OLD, kind='batch', aws=aws)
+        self.assertEqual(aws.calls, [])
+        self.assertEqual(MODULE.definition_arn('memme-backend-batch-v2:7', 'batch'), BOLD)
+
+    def test_all_deploys_batch_only_after_web_passes(self):
+        web, batch = FakeAws(), FakeBatchAws()
+        original = MODULE.execute
+        def execute(mode, source_sha, kind, **_):
+            return original(mode, source_sha, kind=kind, aws=web if kind == 'web' else batch)
+        with patch.object(MODULE, 'execute', side_effect=execute):
+            report = MODULE.deploy_all(SHA)
+        self.assertEqual((report['status'], report['web']['status'], report['batch']['status']), ('PASS', 'PASS', 'PASS'))
+
+    def test_all_skips_batch_when_web_business_smoke_fails(self):
+        web, batch = FakeAws(functional_failure=True), FakeBatchAws()
+        original = MODULE.execute
+        def execute(mode, source_sha, kind, **_):
+            return original(mode, source_sha, kind=kind, aws=web if kind == 'web' else batch)
+        with patch.object(MODULE, 'execute', side_effect=execute):
+            with self.assertRaises(MODULE.DeploymentError) as failed:
+                MODULE.deploy_all(SHA)
+        self.assertEqual(failed.exception.report['batch']['status'], 'SKIPPED')
+        self.assertEqual(batch.calls, [])
+
+
 if __name__ == '__main__':
     unittest.main()

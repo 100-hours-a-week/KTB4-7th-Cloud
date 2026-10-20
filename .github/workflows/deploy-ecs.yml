@@ -8,13 +8,17 @@ on:
         required: true
         type: choice
         options: [deploy, rollback]
+      target:
+        description: all deploys web then batch; rollback restores one target
+        required: true
+        type: choice
+        options: [all, web, batch]
       source_sha:
-        description: Backend source SHA already published by CI (deploy only)
+        description: Full 40-character Backend dev SHA already published by CI (deploy only)
         required: false
         type: string
-        default: '2ba823ded25a10e5b58d144cfca4be4916105ab5'
       task_definition:
-        description: Recorded memme-backend-v2 revision (rollback only)
+        description: Recorded revision of the selected target, e.g. memme-backend-v2:16 (rollback only)
         required: false
         type: string
 
@@ -42,6 +46,20 @@ jobs:
           python-version: '3.13'
       - name: Test deployment and recovery guards
         run: python3 -m unittest discover -s tests -v
+      - name: Check deployment gate
+        if: inputs.mode == 'deploy'
+        env:
+          ENABLED: ${{ vars.BACKEND_ECS_CD_ENABLED }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          # Production images still carry the Redis session and DB pool patches that Backend dev lacks.
+          # Enable this variable only after those patches are merged into dev and published by CI.
+          if [[ "$ENABLED" != 'true' ]]; then
+            echo 'BACKEND_ECS_CD_ENABLED is not true; deploying a dev CI image would drop the Redis session and DB pool patches.' >&2
+            exit 1
+          fi
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'source_sha must be a full 40-character SHA' >&2; exit 1; }
       - name: Configure ECS deployment credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -50,16 +68,17 @@ jobs:
       - name: Deploy or restore Backend ECS
         env:
           MODE: ${{ inputs.mode }}
+          TARGET: ${{ inputs.target }}
           SOURCE_SHA: ${{ inputs.source_sha }}
           TASK_DEFINITION: ${{ inputs.task_definition }}
         shell: bash
         run: |
           case "$MODE" in
             deploy)
-              python3 deploy/ecs/deploy_backend.py deploy --source-sha "$SOURCE_SHA"
+              python3 deploy/ecs/deploy_backend.py deploy --target "$TARGET" --source-sha "$SOURCE_SHA"
               ;;
             rollback)
-              python3 deploy/ecs/deploy_backend.py rollback --task-definition "$TASK_DEFINITION"
+              python3 deploy/ecs/deploy_backend.py rollback --target "$TARGET" --task-definition "$TASK_DEFINITION"
               ;;
             *) exit 2 ;;
           esac
