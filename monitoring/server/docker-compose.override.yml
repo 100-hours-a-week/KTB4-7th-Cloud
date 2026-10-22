@@ -1,0 +1,53 @@
+# 모니터링 서버 전용 추가 설정: Cloudflare Tunnel + Cloudflare Access JWT로 Grafana 자동 로그인
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-2024.12.2}
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    depends_on: [grafana]
+    mem_limit: 128m
+
+  grafana:
+    environment:
+      GF_AUTH_JWT_ENABLED: "true"
+      GF_AUTH_JWT_HEADER_NAME: Cf-Access-Jwt-Assertion
+      GF_AUTH_JWT_EMAIL_CLAIM: email
+      GF_AUTH_JWT_USERNAME_CLAIM: email
+      GF_AUTH_JWT_JWK_SET_URL: https://memme.cloudflareaccess.com/cdn-cgi/access/certs
+      GF_AUTH_JWT_CACHE_TTL: 60m
+      GF_AUTH_JWT_EXPECT_CLAIMS: '{"aud":["bfe8fd795f7bf7e511528a2b393c22242d57ac6b4c99913aa246233106ad12f7"],"iss":"https://memme.cloudflareaccess.com"}'
+      GF_AUTH_JWT_AUTO_SIGN_UP: "true"
+      GF_AUTH_JWT_ROLE_ATTRIBUTE_PATH: "contains(['${GRAFANA_ADMIN_EMAIL}'], email) && 'Admin' || 'Viewer'"
+      GF_AUTH_JWT_SKIP_ORG_ROLE_SYNC: "false"
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL}   # 알림 연락처(provisioning/alerting/discord.yaml)
+
+  mysqld-exporter:
+    image: prom/mysqld-exporter:v0.16.0
+    restart: unless-stopped
+    command:
+      - --config.my-cnf=/cfg/my.cnf
+      - --collect.info_schema.processlist
+    volumes:
+      - ./mysqld-exporter.cnf:/cfg/my.cnf:ro
+      - ./mysql-ca.pem:/cfg/ca.pem:ro
+    mem_limit: 96m
+
+  # 모니터링 서버 자신의 디스크·메모리 (DB·제어 서버와 같은 수집기 구성)
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    restart: unless-stopped
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --collector.disable-defaults
+      - --collector.filesystem
+      - --collector.meminfo
+      - --collector.cpu
+      - --collector.loadavg
+      - --collector.diskstats
+      - --collector.netdev
+    volumes:
+      - /:/host:ro,rslave
+    mem_limit: 64m

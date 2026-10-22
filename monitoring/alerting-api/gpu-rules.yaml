@@ -1,0 +1,81 @@
+# memme V2 GPU(RunPod) 알림 → 기본 정책(discord-memme)
+# Grafana API로 만든 그룹 gpu(UI 편집 가능)의 기록본. 서버 provisioning 폴더에 넣으면 같은 uid가 충돌하므로, 파일 관리로 옮길 때는 API 규칙을 먼저 지운다
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: gpu
+    folder: memme-v2 알림
+    interval: 1m
+    rules:
+      - uid: memme-gpu-collect
+        title: GPU 수집 중단
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'min(memme_gpu_up{host="gpu-runpod"}) * min(up{host="gpu-runpod",job="vllm"})' }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: lt, params: [1] } } ] }
+        for: 3m
+        noDataState: Alerting    # Pod 중지·수집기 중단 모두 감지. 계획된 중지는 silence로 처리
+        execErrState: Error
+        labels: { area: gpu }
+        annotations:
+          summary: "RunPod GPU 또는 vLLM 지표가 3분 이상 들어오지 않습니다. Pod 중지·vLLM 다운·수집기 중단 확인. 계획된 Pod 중지면 무시"
+
+      - uid: memme-gpu-temp
+        title: GPU 온도 85℃ 초과
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'max(memme_gpu_temperature_celsius{host="gpu-runpod"})' }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: gt, params: [85] } } ] }
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: { area: gpu }
+        annotations:
+          summary: "GPU 온도가 5분 이상 85℃를 넘었습니다."
+
+      - uid: memme-vllm-queue
+        title: vLLM 대기열 적체
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'sum(vllm:num_requests_waiting{host="gpu-runpod"})' }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: gt, params: [5] } } ] }
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: { area: gpu }
+        annotations:
+          summary: "vLLM 대기 요청이 5분 이상 5건을 넘습니다. GPU 처리 한계·Claude 폴백 증가 가능"
+
+      - uid: memme-vllm-reject
+        title: vLLM 요청 거부
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'sum(increase(vllm:admission_rejections_total{host="gpu-runpod"}[5m]))' }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: gt, params: [0] } } ] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { area: gpu }
+        annotations:
+          summary: "최근 5분 동안 vLLM이 요청을 거부했습니다."

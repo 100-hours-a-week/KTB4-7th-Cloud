@@ -1,0 +1,96 @@
+// memme-v2 RunPod GPU Pod 수집기: vLLM /metrics·nvidia-smi 수치 → Prometheus, vLLM 로그 → Loki
+// 전송: HTTPS → Cloudflare Access(서비스 토큰) → Tunnel → 모니터링 서버. 토큰은 환경변수로만 받는다
+logging {
+  level = "warn"
+}
+
+// ---------- 지표 ----------
+// vLLM 전용 지표 (num_requests_*, kv_cache_usage_perc, 첫 토큰 시간 등)
+prometheus.scrape "vllm" {
+  targets         = [{ "__address__" = sys.env("VLLM_METRICS_ADDR") }]
+  metrics_path    = "/metrics"
+  scrape_interval = "15s"
+  job_name        = "vllm"
+  forward_to      = [prometheus.remote_write.memme.receiver]
+}
+
+// GPU 수치: start-observability.sh의 nvidia-smi 루프가 쓰는 textfile, Pod 볼륨 디스크
+prometheus.exporter.unix "pod" {
+  set_collectors = ["textfile", "filesystem"]
+  textfile {
+    directory = sys.env("MEMME_OBS_TEXTFILE_DIR")
+  }
+  filesystem {
+    mount_points_exclude = "^/(dev|proc|run|sys|etc|usr/lib/firmware)($|/)"
+    fs_types_exclude     = "^(tmpfs|overlay|proc|sysfs|devpts|mqueue|cgroup2?|nsfs|squashfs|autofs)$"
+  }
+}
+
+prometheus.scrape "pod" {
+  targets         = prometheus.exporter.unix.pod.targets
+  scrape_interval = "15s"
+  job_name        = "gpu-pod"
+  forward_to      = [prometheus.remote_write.memme.receiver]
+}
+
+prometheus.remote_write "memme" {
+  endpoint {
+    url = sys.env("MEMME_INGEST_URL") + "/api/v1/write"
+    headers = {
+      "CF-Access-Client-Id"     = sys.env("CF_ACCESS_CLIENT_ID"),
+      "CF-Access-Client-Secret" = sys.env("CF_ACCESS_CLIENT_SECRET"),
+    }
+  }
+  external_labels = {
+    host   = "gpu-runpod",
+    env    = "prod",
+    pod_id = sys.env("RUNPOD_POD_ID"),
+  }
+}
+
+// ---------- 로그 ----------
+local.file_match "vllm" {
+  path_targets = [{ "__path__" = sys.env("MEMME_OBS_LOG_FILE"), "container" = "vllm" }]
+}
+
+// 처음 보는 파일은 끝에서부터 읽는다 (기존 운영 로그 수십만 줄을 한꺼번에 보내지 않도록)
+loki.source.file "vllm" {
+  targets       = local.file_match.vllm.targets
+  tail_from_end = true
+  forward_to    = [loki.process.mask.receiver]
+}
+
+// 수집용 /metrics·헬스 체크 접근 로그는 버리고, 민감 정보는 AI EC2와 같은 규칙으로 가린다
+loki.process "mask" {
+  stage.drop {
+    expression = "\"GET /(metrics|health|ping)[ ?]"
+  }
+  // 요청 로깅이 켜진 vLLM은 프롬프트·토큰 원문을 남긴다 (매출 데이터 포함 가능). 서버 옵션과 별개로 한 번 더 막는다
+  stage.drop {
+    expression = "Received request|prompt: |prompt_token_ids|Generated response"
+  }
+  stage.replace {
+    expression = "X-Amz-Signature=([0-9a-fA-F]+)"
+    replace    = "REDACTED"
+  }
+  stage.replace {
+    expression = "(?i)(?:authorization|x-internal-token|internal_ai_token|api[_-]?key|cf-access-client-secret)[\"']?\\s*[:=]\\s*[\"']?(?:Bearer\\s+)?([A-Za-z0-9._~+/=-]{8,})"
+    replace    = "REDACTED"
+  }
+  forward_to = [loki.write.memme.receiver]
+}
+
+loki.write "memme" {
+  endpoint {
+    url = sys.env("MEMME_INGEST_URL") + "/loki/api/v1/push"
+    headers = {
+      "CF-Access-Client-Id"     = sys.env("CF_ACCESS_CLIENT_ID"),
+      "CF-Access-Client-Secret" = sys.env("CF_ACCESS_CLIENT_SECRET"),
+    }
+  }
+  external_labels = {
+    host   = "gpu-runpod",
+    env    = "prod",
+    pod_id = sys.env("RUNPOD_POD_ID"),
+  }
+}

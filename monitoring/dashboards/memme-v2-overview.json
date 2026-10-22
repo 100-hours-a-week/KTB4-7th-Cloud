@@ -1,0 +1,1409 @@
+{
+ "uid": "memme-v2-overview",
+ "title": "memme V2 서비스 개요",
+ "tags": [
+  "memme-v2",
+  "cloudwatch"
+ ],
+ "timezone": "browser",
+ "schemaVersion": 39,
+ "time": {
+  "from": "now-6h",
+  "to": "now"
+ },
+ "refresh": "5m",
+ "editable": true,
+ "graphTooltip": 1,
+ "panels": [
+  {
+   "id": 1,
+   "type": "row",
+   "title": "서비스 (ALB · 백엔드)",
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "id": 2,
+   "title": "정상 웹 서버 수",
+   "type": "stat",
+   "datasource": {
+    "type": "cloudwatch",
+    "uid": "cloudwatch"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ApplicationELB",
+     "metricName": "HealthyHostCount",
+     "dimensions": {
+      "LoadBalancer": [
+       "app/memme-v2-alb/e8dd35982688eba9"
+      ],
+      "TargetGroup": [
+       "targetgroup/memme-backend-v2/857e4e0050333092"
+      ]
+     },
+     "statistic": "Minimum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "정상"
+    }
+   ],
+   "gridPos": {
+    "x": 0,
+    "y": 1,
+    "w": 4,
+    "h": 5
+   },
+   "description": "ALB 대상 그룹 기준. 2 미만이면 알람",
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 1
+       },
+       {
+        "color": "green",
+        "value": 2
+       }
+      ]
+     },
+     "color": {
+      "mode": "thresholds"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "colorMode": "background",
+    "graphMode": "none"
+   }
+  },
+  {
+   "id": 3,
+   "title": "요청 수 (분당)",
+   "type": "timeseries",
+   "datasource": {
+    "type": "cloudwatch",
+    "uid": "cloudwatch"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ApplicationELB",
+     "metricName": "RequestCount",
+     "dimensions": {
+      "LoadBalancer": [
+       "app/memme-v2-alb/e8dd35982688eba9"
+      ]
+     },
+     "statistic": "Sum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "요청"
+    }
+   ],
+   "gridPos": {
+    "x": 4,
+    "y": 1,
+    "w": 10,
+    "h": 5
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "drawStyle": "bars",
+      "fillOpacity": 80,
+      "lineWidth": 1,
+      "spanNulls": false
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 4,
+   "title": "5xx 오류 (분당)",
+   "type": "timeseries",
+   "datasource": {
+    "type": "cloudwatch",
+    "uid": "cloudwatch"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ApplicationELB",
+     "metricName": "HTTPCode_Target_5XX_Count",
+     "dimensions": {
+      "LoadBalancer": [
+       "app/memme-v2-alb/e8dd35982688eba9"
+      ],
+      "TargetGroup": [
+       "targetgroup/memme-backend-v2/857e4e0050333092"
+      ]
+     },
+     "statistic": "Sum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "백엔드 5xx"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ApplicationELB",
+     "metricName": "HTTPCode_ELB_5XX_Count",
+     "dimensions": {
+      "LoadBalancer": [
+       "app/memme-v2-alb/e8dd35982688eba9"
+      ]
+     },
+     "statistic": "Sum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "ALB 5xx"
+    },
+    {
+     "refId": "C",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ApplicationELB",
+     "metricName": "HTTPCode_Target_4XX_Count",
+     "dimensions": {
+      "LoadBalancer": [
+       "app/memme-v2-alb/e8dd35982688eba9"
+      ],
+      "TargetGroup": [
+       "targetgroup/memme-backend-v2/857e4e0050333092"
+      ]
+     },
+     "statistic": "Sum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "백엔드 4xx"
+    }
+   ],
+   "gridPos": {
+    "x": 14,
+    "y": 1,
+    "w": 10,
+    "h": 5
+   },
+   "description": "알람 기준: 5분 합계 10건 이상",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "drawStyle": "bars",
+      "fillOpacity": 80,
+      "lineWidth": 1,
+      "spanNulls": false
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 5,
+   "title": "응답 시간",
+   "type": "timeseries",
+   "datasource": {
+    "type": "cloudwatch",
+    "uid": "cloudwatch"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ApplicationELB",
+     "metricName": "TargetResponseTime",
+     "dimensions": {
+      "LoadBalancer": [
+       "app/memme-v2-alb/e8dd35982688eba9"
+      ],
+      "TargetGroup": [
+       "targetgroup/memme-backend-v2/857e4e0050333092"
+      ]
+     },
+     "statistic": "p95",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "p95"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ApplicationELB",
+     "metricName": "TargetResponseTime",
+     "dimensions": {
+      "LoadBalancer": [
+       "app/memme-v2-alb/e8dd35982688eba9"
+      ],
+      "TargetGroup": [
+       "targetgroup/memme-backend-v2/857e4e0050333092"
+      ]
+     },
+     "statistic": "p50",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "p50"
+    },
+    {
+     "refId": "C",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ApplicationELB",
+     "metricName": "TargetResponseTime",
+     "dimensions": {
+      "LoadBalancer": [
+       "app/memme-v2-alb/e8dd35982688eba9"
+      ],
+      "TargetGroup": [
+       "targetgroup/memme-backend-v2/857e4e0050333092"
+      ]
+     },
+     "statistic": "p99",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "p99"
+    }
+   ],
+   "gridPos": {
+    "x": 0,
+    "y": 6,
+    "w": 12,
+    "h": 7
+   },
+   "description": "알람 기준: p95 3초 초과",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 6,
+   "title": "ECS CPU (%)",
+   "type": "timeseries",
+   "datasource": {
+    "type": "cloudwatch",
+    "uid": "cloudwatch"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ECS",
+     "metricName": "CPUUtilization",
+     "dimensions": {
+      "ClusterName": [
+       "memme-v2"
+      ],
+      "ServiceName": [
+       "memme-backend-v2"
+      ]
+     },
+     "statistic": "Average",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "웹 평균"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ECS",
+     "metricName": "CPUUtilization",
+     "dimensions": {
+      "ClusterName": [
+       "memme-v2"
+      ],
+      "ServiceName": [
+       "memme-backend-v2"
+      ]
+     },
+     "statistic": "Maximum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "웹 최대"
+    },
+    {
+     "refId": "C",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ECS",
+     "metricName": "CPUUtilization",
+     "dimensions": {
+      "ClusterName": [
+       "memme-v2"
+      ],
+      "ServiceName": [
+       "memme-backend-batch-v2"
+      ]
+     },
+     "statistic": "Maximum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "배치 최대"
+    }
+   ],
+   "gridPos": {
+    "x": 12,
+    "y": 6,
+    "w": 6,
+    "h": 7
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 7,
+   "title": "ECS 메모리 (%)",
+   "type": "timeseries",
+   "datasource": {
+    "type": "cloudwatch",
+    "uid": "cloudwatch"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ECS",
+     "metricName": "MemoryUtilization",
+     "dimensions": {
+      "ClusterName": [
+       "memme-v2"
+      ],
+      "ServiceName": [
+       "memme-backend-v2"
+      ]
+     },
+     "statistic": "Average",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "웹 평균"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ECS",
+     "metricName": "MemoryUtilization",
+     "dimensions": {
+      "ClusterName": [
+       "memme-v2"
+      ],
+      "ServiceName": [
+       "memme-backend-v2"
+      ]
+     },
+     "statistic": "Maximum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "웹 최대"
+    },
+    {
+     "refId": "C",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ECS",
+     "metricName": "MemoryUtilization",
+     "dimensions": {
+      "ClusterName": [
+       "memme-v2"
+      ],
+      "ServiceName": [
+       "memme-backend-batch-v2"
+      ]
+     },
+     "statistic": "Maximum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "배치 최대"
+    }
+   ],
+   "gridPos": {
+    "x": 18,
+    "y": 6,
+    "w": 6,
+    "h": 7
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 8,
+   "type": "row",
+   "title": "서버 (EC2) · Redis",
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 13,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "id": 9,
+   "title": "EC2 CPU (%)",
+   "type": "timeseries",
+   "datasource": {
+    "type": "cloudwatch",
+    "uid": "cloudwatch"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/EC2",
+     "metricName": "CPUUtilization",
+     "dimensions": {
+      "InstanceId": [
+       "i-06c4c159ed4155c70"
+      ]
+     },
+     "statistic": "Average",
+     "period": "300",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "AI 10.0.1.236"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/EC2",
+     "metricName": "CPUUtilization",
+     "dimensions": {
+      "InstanceId": [
+       "i-096b3f8f8553bb213"
+      ]
+     },
+     "statistic": "Average",
+     "period": "300",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "DB 10.0.11.185"
+    },
+    {
+     "refId": "C",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/EC2",
+     "metricName": "CPUUtilization",
+     "dimensions": {
+      "InstanceId": [
+       "i-056877f91d647a899"
+      ]
+     },
+     "statistic": "Average",
+     "period": "300",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "DB 10.0.11.65"
+    },
+    {
+     "refId": "D",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/EC2",
+     "metricName": "CPUUtilization",
+     "dimensions": {
+      "InstanceId": [
+       "i-038258fbf958879f2"
+      ]
+     },
+     "statistic": "Average",
+     "period": "300",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "DB제어 10.0.11.9"
+    },
+    {
+     "refId": "E",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/EC2",
+     "metricName": "CPUUtilization",
+     "dimensions": {
+      "InstanceId": [
+       "i-0e748b04b9a04ad71"
+      ]
+     },
+     "statistic": "Average",
+     "period": "300",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "모니터링 10.0.1.8"
+    }
+   ],
+   "gridPos": {
+    "x": 0,
+    "y": 14,
+    "w": 10,
+    "h": 7
+   },
+   "description": "기본 모니터링 5분 단위",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 10,
+   "title": "EC2 상태 검사 실패",
+   "type": "timeseries",
+   "datasource": {
+    "type": "cloudwatch",
+    "uid": "cloudwatch"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/EC2",
+     "metricName": "StatusCheckFailed",
+     "dimensions": {
+      "InstanceId": [
+       "i-06c4c159ed4155c70"
+      ]
+     },
+     "statistic": "Maximum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "AI 10.0.1.236"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/EC2",
+     "metricName": "StatusCheckFailed",
+     "dimensions": {
+      "InstanceId": [
+       "i-096b3f8f8553bb213"
+      ]
+     },
+     "statistic": "Maximum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "DB 10.0.11.185"
+    },
+    {
+     "refId": "C",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/EC2",
+     "metricName": "StatusCheckFailed",
+     "dimensions": {
+      "InstanceId": [
+       "i-056877f91d647a899"
+      ]
+     },
+     "statistic": "Maximum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "DB 10.0.11.65"
+    },
+    {
+     "refId": "D",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/EC2",
+     "metricName": "StatusCheckFailed",
+     "dimensions": {
+      "InstanceId": [
+       "i-038258fbf958879f2"
+      ]
+     },
+     "statistic": "Maximum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "DB제어 10.0.11.9"
+    },
+    {
+     "refId": "E",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/EC2",
+     "metricName": "StatusCheckFailed",
+     "dimensions": {
+      "InstanceId": [
+       "i-0e748b04b9a04ad71"
+      ]
+     },
+     "statistic": "Maximum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "모니터링 10.0.1.8"
+    }
+   ],
+   "gridPos": {
+    "x": 10,
+    "y": 14,
+    "w": 6,
+    "h": 7
+   },
+   "description": "0이 정상",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     },
+     "min": 0,
+     "max": 1,
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 11,
+   "title": "AI 서버 메모리·디스크 (%)",
+   "type": "timeseries",
+   "datasource": {
+    "type": "cloudwatch",
+    "uid": "cloudwatch"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "CWAgent",
+     "metricName": "mem_used_percent",
+     "dimensions": {
+      "InstanceId": [
+       "i-06c4c159ed4155c70"
+      ]
+     },
+     "statistic": "Average",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "메모리"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "CWAgent",
+     "metricName": "disk_used_percent",
+     "dimensions": {
+      "InstanceId": [
+       "i-06c4c159ed4155c70"
+      ],
+      "path": [
+       "/"
+      ],
+      "fstype": [
+       "ext4"
+      ]
+     },
+     "statistic": "Maximum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "디스크 /"
+    }
+   ],
+   "gridPos": {
+    "x": 16,
+    "y": 14,
+    "w": 8,
+    "h": 7
+   },
+   "description": "알람: 메모리 90%(5분), 디스크 85%",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "min": 0,
+     "max": 100,
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 12,
+   "title": "Redis 메모리 (%)",
+   "type": "timeseries",
+   "datasource": {
+    "type": "cloudwatch",
+    "uid": "cloudwatch"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ElastiCache",
+     "metricName": "DatabaseMemoryUsagePercentage",
+     "dimensions": {
+      "CacheClusterId": [
+       "memme-prod-session-v2-001"
+      ]
+     },
+     "statistic": "Maximum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "메모리"
+    }
+   ],
+   "gridPos": {
+    "x": 0,
+    "y": 21,
+    "w": 8,
+    "h": 6
+   },
+   "description": "알람: 80% 초과",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 13,
+   "title": "Redis 연결 수 · eviction",
+   "type": "timeseries",
+   "datasource": {
+    "type": "cloudwatch",
+    "uid": "cloudwatch"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ElastiCache",
+     "metricName": "CurrConnections",
+     "dimensions": {
+      "CacheClusterId": [
+       "memme-prod-session-v2-001"
+      ]
+     },
+     "statistic": "Maximum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "연결 수"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ElastiCache",
+     "metricName": "Evictions",
+     "dimensions": {
+      "CacheClusterId": [
+       "memme-prod-session-v2-001"
+      ]
+     },
+     "statistic": "Sum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "eviction"
+    }
+   ],
+   "gridPos": {
+    "x": 8,
+    "y": 21,
+    "w": 8,
+    "h": 6
+   },
+   "description": "eviction 1건 이상이면 알람(세션 삭제)",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 14,
+   "title": "Redis 엔진 CPU (%)",
+   "type": "timeseries",
+   "datasource": {
+    "type": "cloudwatch",
+    "uid": "cloudwatch"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/ElastiCache",
+     "metricName": "EngineCPUUtilization",
+     "dimensions": {
+      "CacheClusterId": [
+       "memme-prod-session-v2-001"
+      ]
+     },
+     "statistic": "Maximum",
+     "period": "60",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "엔진 CPU"
+    }
+   ],
+   "gridPos": {
+    "x": 16,
+    "y": 21,
+    "w": 8,
+    "h": 6
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 15,
+   "type": "row",
+   "title": "백엔드 로그 (CloudWatch Logs)",
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 27,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "id": 16,
+   "title": "오류·예외 로그 수 (최근 24시간, 1시간 단위)",
+   "type": "timeseries",
+   "datasource": {
+    "type": "cloudwatch",
+    "uid": "cloudwatch"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Logs",
+     "region": "default",
+     "id": "",
+     "logGroups": [
+      {
+       "arn": "arn:aws:logs:ap-northeast-2:613538400341:log-group:/ecs/memme/backend-v2",
+       "name": "/ecs/memme/backend-v2"
+      }
+     ],
+     "logGroupNames": [
+      "/ecs/memme/backend-v2"
+     ],
+     "expression": "filter @message like /(?i)(ERROR|Exception)/ | stats count(*) as errors by bin(1h)",
+     "statsGroups": []
+    }
+   ],
+   "gridPos": {
+    "x": 0,
+    "y": 28,
+    "w": 8,
+    "h": 8
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "drawStyle": "bars",
+      "fillOpacity": 80,
+      "lineWidth": 1,
+      "spanNulls": false
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "timeFrom": "24h"
+  },
+  {
+   "id": 17,
+   "title": "최근 오류·예외 로그 (최근 24시간)",
+   "type": "logs",
+   "datasource": {
+    "type": "cloudwatch",
+    "uid": "cloudwatch"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Logs",
+     "region": "default",
+     "id": "",
+     "logGroups": [
+      {
+       "arn": "arn:aws:logs:ap-northeast-2:613538400341:log-group:/ecs/memme/backend-v2",
+       "name": "/ecs/memme/backend-v2"
+      }
+     ],
+     "logGroupNames": [
+      "/ecs/memme/backend-v2"
+     ],
+     "expression": "fields @timestamp, @logStream, @message | filter @message like /(?i)(ERROR|Exception)/ | sort @timestamp desc | limit 100",
+     "statsGroups": []
+    }
+   ],
+   "gridPos": {
+    "x": 8,
+    "y": 28,
+    "w": 16,
+    "h": 8
+   },
+   "description": "웹(ecs/*)·배치(batch/*) 스트림",
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "options": {
+    "showTime": true,
+    "wrapLogMessage": true,
+    "sortOrder": "Descending",
+    "enableLogDetails": true
+   },
+   "timeFrom": "24h"
+  }
+ ],
+ "description": "ALB·ECS·EC2·Redis·BE 로그 (CloudWatch). 새로고침 5분: CloudWatch 조회 비용 절감"
+}

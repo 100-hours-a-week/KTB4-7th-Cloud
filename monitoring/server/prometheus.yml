@@ -1,0 +1,52 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    env: prod
+    project: memme-v2
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs: [{ targets: ["localhost:9090"] }]
+  - job_name: loki
+    static_configs: [{ targets: ["loki:3100"] }]
+  - job_name: grafana
+    static_configs: [{ targets: ["grafana:3000"] }]
+
+  # MySQL (Primary/Replica 역할은 지표로 판단: mysql_slave_status_* 존재 여부)
+  - job_name: mysql
+    metrics_path: /probe
+    params:
+      auth_module: [client]
+    static_configs:
+      - targets: ["10.0.11.185:3306", "10.0.11.65:3306"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        regex: "([^:]+):.*"
+        target_label: instance
+      - target_label: __address__
+        replacement: mysqld-exporter:9104
+
+  - job_name: mysqld-exporter
+    static_configs:
+      - targets: ["mysqld-exporter:9104"]
+
+  - job_name: proxysql
+    static_configs:
+      - targets: ["10.0.11.9:6070"]
+        labels:
+          instance: "10.0.11.9"
+
+  # 호스트 지표 (node_exporter 1.9.1, DB·제어 서버는 systemd, 모니터링 서버는 컨테이너). AI 서버는 Alloy remote_write(host=ai-server)
+  - job_name: node
+    static_configs:
+      - targets: ["10.0.11.185:9100"]
+        labels: { host: db-185, instance: "10.0.11.185" }
+      - targets: ["10.0.11.65:9100"]
+        labels: { host: db-65, instance: "10.0.11.65" }
+      - targets: ["10.0.11.9:9100"]
+        labels: { host: db-control, instance: "10.0.11.9" }
+      - targets: ["node-exporter:9100"]
+        labels: { host: monitoring, instance: "10.0.1.8" }

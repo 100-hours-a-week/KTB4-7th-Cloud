@@ -1,0 +1,379 @@
+{
+ "uid": "memme-v2-ai",
+ "title": "memme V2 AI 서버",
+ "tags": [
+  "memme-v2",
+  "ai",
+  "loki"
+ ],
+ "timezone": "browser",
+ "schemaVersion": 39,
+ "time": {
+  "from": "now-3h",
+  "to": "now"
+ },
+ "refresh": "1m",
+ "editable": true,
+ "graphTooltip": 1,
+ "panels": [
+  {
+   "id": 1,
+   "type": "row",
+   "title": "AI 서버 자원 (Alloy → Prometheus)",
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "id": 2,
+   "type": "timeseries",
+   "title": "CPU 사용률 (%)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "100*(1-avg(rate(node_cpu_seconds_total{host=\"ai-server\",mode=\"idle\"}[2m])))",
+     "legendFormat": "CPU"
+    }
+   ],
+   "gridPos": {
+    "x": 0,
+    "y": 1,
+    "w": 8,
+    "h": 7
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 3,
+   "type": "timeseries",
+   "title": "메모리·디스크 (%)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "100*(1-node_memory_MemAvailable_bytes{host=\"ai-server\"}/node_memory_MemTotal_bytes{host=\"ai-server\"})",
+     "legendFormat": "메모리"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "100*(1-node_filesystem_avail_bytes{host=\"ai-server\",mountpoint=\"/\"}/node_filesystem_size_bytes{host=\"ai-server\",mountpoint=\"/\"})",
+     "legendFormat": "디스크 /"
+    }
+   ],
+   "gridPos": {
+    "x": 8,
+    "y": 1,
+    "w": 8,
+    "h": 7
+   },
+   "description": "디스크 85% 알람(CloudWatch). 옛 AI 이미지가 쌓이면 증가",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "min": 0,
+     "max": 100,
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 4,
+   "type": "timeseries",
+   "title": "네트워크 (bytes/s)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum(rate(node_network_receive_bytes_total{host=\"ai-server\",device!~\"lo|veth.*|docker.*|br-.*\"}[2m]))",
+     "legendFormat": "수신"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum(rate(node_network_transmit_bytes_total{host=\"ai-server\",device!~\"lo|veth.*|docker.*|br-.*\"}[2m]))",
+     "legendFormat": "송신"
+    }
+   ],
+   "gridPos": {
+    "x": 16,
+    "y": 1,
+    "w": 8,
+    "h": 7
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "Bps",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 5,
+   "type": "row",
+   "title": "AI 컨테이너 로그 (Alloy → Loki)",
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 8,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "id": 6,
+   "type": "timeseries",
+   "title": "컨테이너별 로그 줄 수 (5분)",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (container) (count_over_time({host=\"ai-server\",container=~\"memme-ai.*\"}[5m]))",
+     "legendFormat": "{{container}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "x": 0,
+    "y": 9,
+    "w": 12,
+    "h": 7
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "drawStyle": "bars",
+      "fillOpacity": 70,
+      "lineWidth": 1,
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 7,
+   "type": "timeseries",
+   "title": "오류·예외·폴백 로그 (5분)",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (container) (count_over_time({host=\"ai-server\",container=~\"memme-ai.*\"} |~ \"(?i)(error|exception|traceback|fallback|timeout)\" [5m]))",
+     "legendFormat": "{{container}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "x": 12,
+    "y": 9,
+    "w": 12,
+    "h": 7
+   },
+   "description": "error, exception, traceback, fallback, timeout 포함 줄",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "drawStyle": "bars",
+      "fillOpacity": 70,
+      "lineWidth": 1,
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 8,
+   "type": "logs",
+   "title": "AI 로그 ($container)",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 16,
+    "w": 24,
+    "h": 12
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "{host=\"ai-server\",container=~\"$container\"} |~ \"$search\"",
+     "legendFormat": "",
+     "queryType": "range"
+    }
+   ],
+   "options": {
+    "showTime": true,
+    "wrapLogMessage": true,
+    "sortOrder": "Descending",
+    "enableLogDetails": true
+   },
+   "description": "서명 URL·토큰 값은 수집 단계에서 REDACTED 처리"
+  }
+ ],
+ "templating": {
+  "list": [
+   {
+    "name": "container",
+    "label": "컨테이너",
+    "type": "query",
+    "datasource": {
+     "type": "loki",
+     "uid": "loki"
+    },
+    "query": {
+     "label": "container",
+     "stream": "{host=\"ai-server\"}",
+     "type": 1
+    },
+    "definition": "label_values({host=\"ai-server\"}, container)",
+    "includeAll": true,
+    "multi": true,
+    "current": {
+     "text": "All",
+     "value": "$__all"
+    },
+    "allValue": "memme-ai.*",
+    "refresh": 2
+   },
+   {
+    "name": "search",
+    "label": "검색어(정규식)",
+    "type": "textbox",
+    "query": "",
+    "current": {
+     "text": "",
+     "value": ""
+    }
+   }
+  ]
+ }
+}
