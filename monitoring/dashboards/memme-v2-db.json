@@ -1,0 +1,1114 @@
+{
+ "uid": "memme-v2-db",
+ "title": "memme V2 DB",
+ "tags": [
+  "memme-v2",
+  "mysql",
+  "proxysql"
+ ],
+ "timezone": "browser",
+ "schemaVersion": 39,
+ "time": {
+  "from": "now-3h",
+  "to": "now"
+ },
+ "refresh": "1m",
+ "editable": true,
+ "graphTooltip": 1,
+ "panels": [
+  {
+   "id": 1,
+   "type": "row",
+   "title": "복제 상태 (Replica 기준)",
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "id": 2,
+   "type": "stat",
+   "title": "복제 지연 (초)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "mysql_slave_status_seconds_behind_source{job=\"mysql\"}",
+     "legendFormat": "{{instance}}"
+    }
+   ],
+   "gridPos": {
+    "x": 0,
+    "y": 1,
+    "w": 4,
+    "h": 4
+   },
+   "description": "NULL(값 없음)은 복제 중단 가능성 — IO/SQL 상태 함께 확인",
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 5
+       },
+       {
+        "color": "red",
+        "value": 30
+       }
+      ]
+     },
+     "color": {
+      "mode": "thresholds"
+     },
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value_and_name"
+   }
+  },
+  {
+   "id": 3,
+   "type": "stat",
+   "title": "IO 스레드",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "mysql_slave_status_replica_io_running{job=\"mysql\"}",
+     "legendFormat": "{{instance}}"
+    }
+   ],
+   "gridPos": {
+    "x": 4,
+    "y": 1,
+    "w": 4,
+    "h": 4
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "color": {
+      "mode": "thresholds"
+     },
+     "mappings": [
+      {
+       "type": "value",
+       "options": {
+        "0": {
+         "text": "중지",
+         "color": "red"
+        },
+        "1": {
+         "text": "실행",
+         "color": "green"
+        }
+       }
+      }
+     ]
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value_and_name"
+   }
+  },
+  {
+   "id": 4,
+   "type": "stat",
+   "title": "SQL 스레드",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "mysql_slave_status_replica_sql_running{job=\"mysql\"}",
+     "legendFormat": "{{instance}}"
+    }
+   ],
+   "gridPos": {
+    "x": 8,
+    "y": 1,
+    "w": 4,
+    "h": 4
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "color": {
+      "mode": "thresholds"
+     },
+     "mappings": [
+      {
+       "type": "value",
+       "options": {
+        "0": {
+         "text": "중지",
+         "color": "red"
+        },
+        "1": {
+         "text": "실행",
+         "color": "green"
+        }
+       }
+      }
+     ]
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value_and_name"
+   }
+  },
+  {
+   "id": 5,
+   "type": "stat",
+   "title": "복제 오류 번호",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "mysql_slave_status_last_io_errno{job=\"mysql\"} + mysql_slave_status_last_sql_errno{job=\"mysql\"}",
+     "legendFormat": "{{instance}}"
+    }
+   ],
+   "gridPos": {
+    "x": 12,
+    "y": 1,
+    "w": 4,
+    "h": 4
+   },
+   "description": "0이 정상",
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     },
+     "color": {
+      "mode": "thresholds"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value_and_name"
+   }
+  },
+  {
+   "id": 6,
+   "type": "stat",
+   "title": "MySQL 접속 (exporter)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "mysql_up{job=\"mysql\"}",
+     "legendFormat": "{{instance}}"
+    }
+   ],
+   "gridPos": {
+    "x": 16,
+    "y": 1,
+    "w": 4,
+    "h": 4
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "color": {
+      "mode": "thresholds"
+     },
+     "mappings": [
+      {
+       "type": "value",
+       "options": {
+        "0": {
+         "text": "실패",
+         "color": "red"
+        },
+        "1": {
+         "text": "정상",
+         "color": "green"
+        }
+       }
+      }
+     ]
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value_and_name"
+   }
+  },
+  {
+   "id": 7,
+   "type": "stat",
+   "title": "역할 (read_only)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "mysql_global_variables_read_only{job=\"mysql\"}",
+     "legendFormat": "{{instance}}"
+    }
+   ],
+   "gridPos": {
+    "x": 20,
+    "y": 1,
+    "w": 4,
+    "h": 4
+   },
+   "description": "태그가 아니라 실제 read_only 값으로 판단",
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "blue",
+        "value": null
+       }
+      ]
+     },
+     "color": {
+      "mode": "thresholds"
+     },
+     "mappings": [
+      {
+       "type": "value",
+       "options": {
+        "0": {
+         "text": "Primary (쓰기)",
+         "color": "green"
+        },
+        "1": {
+         "text": "Replica (읽기)",
+         "color": "blue"
+        }
+       }
+      }
+     ]
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value_and_name"
+   }
+  },
+  {
+   "id": 8,
+   "type": "timeseries",
+   "title": "복제 지연 추이 (초)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "mysql_slave_status_seconds_behind_source{job=\"mysql\"}",
+     "legendFormat": "{{instance}}"
+    }
+   ],
+   "gridPos": {
+    "x": 0,
+    "y": 5,
+    "w": 12,
+    "h": 7
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     },
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 9,
+   "type": "timeseries",
+   "title": "ProxySQL 백엔드 상태",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "proxysql_connpool_conns_status",
+     "legendFormat": "hg{{hostgroup}} {{endpoint}}"
+    }
+   ],
+   "gridPos": {
+    "x": 12,
+    "y": 5,
+    "w": 12,
+    "h": 7
+   },
+   "description": "1 ONLINE · 2 SHUNNED · 3 OFFLINE_SOFT · 4 OFFLINE_HARD (Router 16441/16442 경유)",
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "spanNulls": true,
+      "lineInterpolation": "stepAfter"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 10,
+   "type": "row",
+   "title": "MySQL 부하",
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 12,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "id": 11,
+   "type": "timeseries",
+   "title": "초당 쿼리",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "rate(mysql_global_status_queries{job=\"mysql\"}[2m])",
+     "legendFormat": "{{instance}}"
+    }
+   ],
+   "gridPos": {
+    "x": 0,
+    "y": 13,
+    "w": 8,
+    "h": 7
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     },
+     "unit": "ops"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 12,
+   "type": "timeseries",
+   "title": "연결 수",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "mysql_global_status_threads_connected{job=\"mysql\"}",
+     "legendFormat": "연결 {{instance}}"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "mysql_global_status_threads_running{job=\"mysql\"}",
+     "legendFormat": "실행 중 {{instance}}"
+    }
+   ],
+   "gridPos": {
+    "x": 8,
+    "y": 13,
+    "w": 8,
+    "h": 7
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 13,
+   "type": "timeseries",
+   "title": "느린 쿼리·중단 연결 (분당)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "60*rate(mysql_global_status_slow_queries{job=\"mysql\"}[5m])",
+     "legendFormat": "느린 쿼리 {{instance}}"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "60*rate(mysql_global_status_aborted_connects{job=\"mysql\"}[5m])",
+     "legendFormat": "중단 연결 {{instance}}"
+    }
+   ],
+   "gridPos": {
+    "x": 16,
+    "y": 13,
+    "w": 8,
+    "h": 7
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 14,
+   "type": "row",
+   "title": "ProxySQL (앱 → DB 경로)",
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 20,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "id": 15,
+   "type": "timeseries",
+   "title": "초당 질의 (ProxySQL)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "rate(proxysql_questions_total{protocol=\"mysql\"}[2m])",
+     "legendFormat": "질의/s"
+    }
+   ],
+   "gridPos": {
+    "x": 0,
+    "y": 21,
+    "w": 8,
+    "h": 7
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     },
+     "unit": "ops"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 16,
+   "type": "timeseries",
+   "title": "백엔드 연결 생성·중단 (분당)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "60*rate(proxysql_server_connections_total{protocol=\"mysql\",status=\"created\"}[5m])",
+     "legendFormat": "생성"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "60*rate(proxysql_server_connections_total{protocol=\"mysql\",status=\"aborted\"}[5m])",
+     "legendFormat": "중단"
+    }
+   ],
+   "gridPos": {
+    "x": 8,
+    "y": 21,
+    "w": 8,
+    "h": 7
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 17,
+   "type": "timeseries",
+   "title": "트래픽 (bytes/s)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "rate(proxysql_queries_frontends_bytes_total{protocol=\"mysql\"}[2m])",
+     "legendFormat": "앱↔ProxySQL {{traffic_flow}}"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "rate(proxysql_queries_backends_bytes_total{protocol=\"mysql\"}[2m])",
+     "legendFormat": "ProxySQL↔DB {{traffic_flow}}"
+    }
+   ],
+   "gridPos": {
+    "x": 16,
+    "y": 21,
+    "w": 8,
+    "h": 7
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     },
+     "unit": "Bps"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 18,
+   "type": "row",
+   "title": "DB 서버 (CloudWatch EC2)",
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 28,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "id": 19,
+   "type": "timeseries",
+   "title": "CPU (%)",
+   "datasource": {
+    "type": "cloudwatch",
+    "uid": "cloudwatch"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/EC2",
+     "metricName": "CPUUtilization",
+     "dimensions": {
+      "InstanceId": [
+       "i-096b3f8f8553bb213"
+      ]
+     },
+     "statistic": "Average",
+     "period": "300",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "10.0.11.185"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/EC2",
+     "metricName": "CPUUtilization",
+     "dimensions": {
+      "InstanceId": [
+       "i-056877f91d647a899"
+      ]
+     },
+     "statistic": "Average",
+     "period": "300",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "10.0.11.65"
+    },
+    {
+     "refId": "C",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/EC2",
+     "metricName": "CPUUtilization",
+     "dimensions": {
+      "InstanceId": [
+       "i-038258fbf958879f2"
+      ]
+     },
+     "statistic": "Average",
+     "period": "300",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "제어 10.0.11.9"
+    }
+   ],
+   "gridPos": {
+    "x": 0,
+    "y": 29,
+    "w": 12,
+    "h": 7
+   },
+   "description": "CloudWatch 기본 5분 단위",
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     },
+     "unit": "percent"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 20,
+   "type": "timeseries",
+   "title": "네트워크 수신 (bytes/5분)",
+   "datasource": {
+    "type": "cloudwatch",
+    "uid": "cloudwatch"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/EC2",
+     "metricName": "NetworkIn",
+     "dimensions": {
+      "InstanceId": [
+       "i-096b3f8f8553bb213"
+      ]
+     },
+     "statistic": "Sum",
+     "period": "300",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "10.0.11.185"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/EC2",
+     "metricName": "NetworkIn",
+     "dimensions": {
+      "InstanceId": [
+       "i-056877f91d647a899"
+      ]
+     },
+     "statistic": "Sum",
+     "period": "300",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "10.0.11.65"
+    },
+    {
+     "refId": "C",
+     "datasource": {
+      "type": "cloudwatch",
+      "uid": "cloudwatch"
+     },
+     "queryMode": "Metrics",
+     "region": "default",
+     "namespace": "AWS/EC2",
+     "metricName": "NetworkIn",
+     "dimensions": {
+      "InstanceId": [
+       "i-038258fbf958879f2"
+      ]
+     },
+     "statistic": "Sum",
+     "period": "300",
+     "metricQueryType": 0,
+     "metricEditorMode": 0,
+     "matchExact": true,
+     "id": "",
+     "expression": "",
+     "label": "제어 10.0.11.9"
+    }
+   ],
+   "gridPos": {
+    "x": 12,
+    "y": 29,
+    "w": 12,
+    "h": 7
+   },
+   "description": "",
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "spanNulls": true
+     },
+     "unit": "bytes"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  }
+ ],
+ "description": "mysqld_exporter(모니터링 서버, TLS 검증) + ProxySQL 내장 지표 + CloudWatch EC2"
+}

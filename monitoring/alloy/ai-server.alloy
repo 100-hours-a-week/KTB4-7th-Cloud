@@ -1,0 +1,76 @@
+// memme-v2 AI 서버 수집기: 도커 컨테이너 로그(blue/green/nginx) → Loki, 호스트 지표 → Prometheus
+logging {
+  level = "warn"
+}
+
+// ---------- 로그 ----------
+discovery.docker "local" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.local.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+}
+
+loki.source.docker "containers" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.local.targets
+  relabel_rules = discovery.relabel.containers.rules
+  forward_to    = [loki.process.mask.receiver]
+}
+
+// 민감 정보 가림: 서명 URL, Authorization/토큰 값
+loki.process "mask" {
+  stage.replace {
+    expression = "X-Amz-Signature=([0-9a-fA-F]+)"
+    replace    = "REDACTED"
+  }
+  stage.replace {
+    expression = "(?i)(?:authorization|x-internal-token|internal_ai_token|api[_-]?key)[\"']?\\s*[:=]\\s*[\"']?(?:Bearer\\s+)?([A-Za-z0-9._~+/=-]{8,})"
+    replace    = "REDACTED"
+  }
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://10.0.1.8:3100/loki/api/v1/push"
+  }
+  external_labels = { host = "ai-server", env = "prod" }
+}
+
+// ---------- 지표 ----------
+prometheus.exporter.unix "host" {
+  procfs_path = "/host/proc"
+  sysfs_path  = "/sys"
+  rootfs_path = "/rootfs"
+}
+
+prometheus.scrape "host" {
+  targets         = prometheus.exporter.unix.host.targets
+  scrape_interval = "30s"
+  forward_to      = [prometheus.remote_write.default.receiver]
+}
+
+// cadvisor는 이 서버(cgroup v2·systemd)에서 컨테이너 식별 실패로 제외 (2026-10-21)
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://10.0.1.8:9090/api/v1/write"
+  }
+  external_labels = { host = "ai-server", env = "prod" }
+}

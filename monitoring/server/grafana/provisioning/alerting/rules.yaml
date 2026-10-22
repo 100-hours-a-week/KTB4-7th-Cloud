@@ -1,0 +1,355 @@
+# memme V2 Grafana 알림 규칙 → 기본 정책(discord-memme)
+# 주의: Grafana 프로비저닝 파일은 $VAR를 환경변수로 치환하므로 템플릿 변수는 $$labels·$$values로 적는다
+apiVersion: 1
+
+groups:
+  # ---------- ECS (CloudWatch AWS/ECS LiveTaskCount·CPU·Memory, 1분 지표) ----------
+  - orgId: 1
+    name: ecs
+    folder: memme-v2 알림
+    interval: 1m
+    rules:
+      - uid: memme-ecs-web-tasks
+        title: ECS 웹 태스크 부족
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: cloudwatch
+            model: &cwbase
+              refId: A
+              queryMode: Metrics
+              metricQueryType: 0
+              metricEditorMode: 0
+              region: default
+              namespace: AWS/ECS
+              metricName: LiveTaskCount
+              dimensions: { ClusterName: memme-v2, ServiceName: memme-backend-v2 }
+              matchExact: true
+              statistic: Minimum
+              period: "60"
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last, settings: { mode: dropNN } }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: B, conditions: [ { evaluator: { type: lt, params: [2] } } ] }
+        for: 3m
+        noDataState: Alerting    # 지표가 끊기면 태스크 0으로 간주
+        execErrState: Error
+        labels: { severity: critical, area: ecs }
+        annotations:
+          summary: "웹 서비스 실행 태스크가 2개 미만입니다 (현재 {{ $$values.B }}개)"
+          description: "memme-v2/memme-backend-v2 LiveTaskCount 최소값이 3분 이상 2 미만입니다. ECS 서비스 이벤트와 중지 태스크 사유를 확인하세요."
+
+      - uid: memme-ecs-batch-task
+        title: ECS 배치 태스크 없음
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: cloudwatch
+            model:
+              <<: *cwbase
+              dimensions: { ClusterName: memme-v2, ServiceName: memme-backend-batch-v2 }
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last, settings: { mode: dropNN } }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: B, conditions: [ { evaluator: { type: lt, params: [1] } } ] }
+        for: 10m                 # 배치는 0/100 배포라 교체 중 잠시 0개가 정상
+        noDataState: Alerting
+        execErrState: Error
+        labels: { severity: critical, area: ecs }
+        annotations:
+          summary: "배치 서비스 실행 태스크가 10분 이상 0개입니다"
+          description: "memme-v2/memme-backend-batch-v2 LiveTaskCount가 1 미만입니다. 정기 수집(ASOS·서울 상권)이 멈춥니다."
+
+      - uid: memme-ecs-web-cpu
+        title: ECS 웹 CPU 높음
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: cloudwatch
+            model:
+              <<: *cwbase
+              metricName: CPUUtilization
+              statistic: Average
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last, settings: { mode: dropNN } }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: B, conditions: [ { evaluator: { type: gt, params: [80] } } ] }
+        for: 10m
+        noDataState: OK          # 태스크 부족은 위 규칙이 담당
+        execErrState: Error
+        labels: { severity: warning, area: ecs }
+        annotations:
+          summary: "웹 서비스 평균 CPU가 10분 이상 80%를 넘었습니다 (현재 {{ $$values.B }}%)"
+
+      - uid: memme-ecs-web-memory
+        title: ECS 웹 메모리 높음
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: cloudwatch
+            model:
+              <<: *cwbase
+              metricName: MemoryUtilization
+              statistic: Average
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last, settings: { mode: dropNN } }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: B, conditions: [ { evaluator: { type: gt, params: [85] } } ] }
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning, area: ecs }
+        annotations:
+          summary: "웹 서비스 평균 메모리가 10분 이상 85%를 넘었습니다 (현재 {{ $$values.B }}%)"
+
+  # ---------- DB 복제 (mysqld_exporter /probe, job=mysql) ----------
+  - orgId: 1
+    name: db
+    folder: memme-v2 알림
+    interval: 1m
+    rules:
+      - uid: memme-db-down
+        title: MySQL 접속 불가
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'min by (instance) (mysql_up{job="mysql"})' }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: lt, params: [1] } } ] }
+        for: 2m
+        noDataState: Alerting    # 수집 자체가 끊긴 경우
+        execErrState: Error
+        labels: { severity: critical, area: db }
+        annotations:
+          summary: "MySQL {{ $$labels.instance }}에 접속할 수 없습니다"
+          description: "모니터링 계정의 /probe 결과 mysql_up=0이 2분 이상 이어졌습니다. 인스턴스 상태와 mysqld 프로세스를 확인하세요."
+
+      - uid: memme-db-writable-count
+        title: 쓰기 가능 DB 수 이상
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'sum(1 - mysql_global_variables_read_only{job="mysql"})' }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: outside_range, params: [0.5, 1.5] } } ] }
+        for: 2m
+        noDataState: Alerting
+        execErrState: Error
+        labels: { severity: critical, area: db }
+        annotations:
+          summary: "read_only=0인 DB가 {{ $$values.A }}개입니다 (정상 1개)"
+          description: "0개면 쓰기 가능한 Primary가 없고, 2개면 두 DB 모두 쓰기 가능(분리 위험)입니다. 현재 기준 Primary .185, Replica .65."
+
+      - uid: memme-db-replication-stopped
+        title: DB 복제 중지
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'min by (instance) (mysql_slave_status_replica_io_running{job="mysql"}) * min by (instance) (mysql_slave_status_replica_sql_running{job="mysql"})'
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: lt, params: [1] } } ] }
+        for: 1m
+        noDataState: Alerting    # 복제 상태 행이 사라진 경우(전환·RESET·수집 중단)
+        execErrState: Error
+        labels: { severity: critical, area: db }
+        annotations:
+          summary: "Replica {{ $$labels.instance }}의 복제 IO 또는 SQL 스레드가 멈췄습니다"
+          description: "SHOW REPLICA STATUS의 Last_IO_Error·Last_SQL_Error를 확인하세요. 복제 상태 지표가 사라져도 이 알림이 발생합니다."
+
+      - uid: memme-db-replication-lag
+        title: DB 복제 지연
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'max by (instance) (mysql_slave_status_seconds_behind_source{job="mysql"})' }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: gt, params: [30] } } ] }
+        for: 2m
+        noDataState: OK          # 지표 부재는 복제 중지 규칙이 담당
+        execErrState: Error
+        labels: { severity: warning, area: db }
+        annotations:
+          summary: "Replica {{ $$labels.instance }} 복제 지연 {{ $$values.A }}초 (2분 이상 30초 초과)"
+
+      - uid: memme-db-connections
+        title: MySQL 연결 수 높음
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'max by (instance) (mysql_global_status_threads_connected{job="mysql"} / mysql_global_variables_max_connections{job="mysql"}) * 100'
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: gt, params: [80] } } ] }
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning, area: db }
+        annotations:
+          summary: "MySQL {{ $$labels.instance }} 연결 사용률 {{ $$values.A }}% (5분 이상 80% 초과, 한도 120)"
+
+  # ---------- ProxySQL (제어 서버 10.0.11.9:6070) ----------
+  - orgId: 1
+    name: proxysql
+    folder: memme-v2 알림
+    interval: 1m
+    rules:
+      - uid: memme-proxysql-down
+        title: ProxySQL 지표 수집 불가
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'min(up{job="proxysql"})' }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: lt, params: [1] } } ] }
+        for: 2m
+        noDataState: Alerting
+        execErrState: Error
+        labels: { severity: critical, area: proxysql }
+        annotations:
+          summary: "ProxySQL(10.0.11.9:6070) 지표를 2분 이상 수집하지 못했습니다"
+          description: "ProxySQL 프로세스 중지 또는 제어 서버 장애일 수 있습니다. ECS 웹의 DB 접속 오류와 함께 확인하세요."
+
+      - uid: memme-proxysql-writer
+        title: ProxySQL 쓰기 경로 없음
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'count(proxysql_connpool_conns_status{hostgroup="10"} == 1) or vector(0)' }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: lt, params: [1] } } ] }
+        for: 1m
+        noDataState: Alerting
+        execErrState: Error
+        labels: { severity: critical, area: proxysql }
+        annotations:
+          summary: "ProxySQL 쓰기 hostgroup 10에 ONLINE 백엔드가 없습니다"
+          description: "웹·배치의 쓰기 요청이 실패합니다. 상태값 1=ONLINE, 2=SHUNNED, 3=OFFLINE_SOFT, 4=OFFLINE_HARD."
+
+      - uid: memme-proxysql-conn-denied
+        title: ProxySQL 연결 한도 초과 거부
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'sum(increase(proxysql_access_denied_max_connections_total[5m]))' }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: gt, params: [0] } } ] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning, area: proxysql }
+        annotations:
+          summary: "ProxySQL이 최근 5분간 연결 {{ $$values.A }}건을 한도(32) 초과로 거부했습니다"
+          description: "롤링 배포 중 새 태스크가 기존 연결과 겹칠 때 발생해 왔습니다. 배포 중이 아니면 연결 누수나 풀 설정을 확인하세요."
+
+  # ---------- 호스트 (DB·제어·모니터링: node_exporter job=node, AI 서버: Alloy host=ai-server) ----------
+  - orgId: 1
+    name: host
+    folder: memme-v2 알림
+    interval: 1m
+    rules:
+      - uid: memme-host-collect
+        title: 서버 지표 수집 중단
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'min by (host) (up{job="node"}) or label_replace(count(node_memory_MemTotal_bytes{host="ai-server"}) or vector(0), "host", "ai-server", "", "")'
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: lt, params: [1] } } ] }
+        for: 2m
+        noDataState: Alerting
+        execErrState: Error
+        labels: { severity: warning, area: host }
+        annotations:
+          summary: "{{ $$labels.host }} 서버 지표를 2분 이상 수집하지 못했습니다"
+          description: "DB·제어 서버는 node_exporter 서비스(systemctl status node_exporter)와 SG 9100, AI 서버는 memme-alloy 컨테이너를 확인하세요."
+
+      - uid: memme-host-disk
+        title: 서버 디스크 사용률 높음
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              # 예약 블록을 사용으로 계산하므로 df Use%보다 약 5%p 높게 나온다
+              expr: 'max by (host, mountpoint) ((1 - node_filesystem_avail_bytes{mountpoint=~"/|/data", fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint=~"/|/data", fstype!~"tmpfs|overlay"}) * 100)'
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: gt, params: [85] } } ] }
+        for: 10m
+        noDataState: Alerting    # 전체 수집 중단 감지 (개별 서버는 수집 중단 규칙이 담당)
+        execErrState: Error
+        labels: { severity: warning, area: host }
+        annotations:
+          summary: "{{ $$labels.host }} {{ $$labels.mountpoint }} 디스크 사용률 {{ $$values.A }}% (85% 초과)"
+          description: "DB /data는 MySQL 데이터·이진 로그, DB 루트는 /var/lib/memme-backups 백업, AI 서버는 옛 이미지·컨테이너 로그가 주로 쌓입니다."
+
+      - uid: memme-host-memory
+        title: 서버 메모리 사용률 높음
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'max by (host) ((1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100)'
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: gt, params: [90] } } ] }
+        for: 10m
+        noDataState: OK          # 수집 중단은 디스크 규칙이 담당
+        execErrState: Error
+        labels: { severity: warning, area: host }
+        annotations:
+          summary: "{{ $$labels.host }} 메모리 사용률 {{ $$values.A }}% (10분 이상 90% 초과)"

@@ -70,13 +70,13 @@ NAT Gateway는 사용하지 않습니다. DB 서브넷은 인터넷 경로 없�
 | --- | --- |
 | CloudWatch 알람 | 14개 (ALB, EC2 상태 검사, Redis, AI 서버 메모리·디스크, 모니터링 서버) → SNS `memme-v2-alerts` → 이메일 |
 | ECS 이벤트 | 웹·배치 태스크 중지 시 EventBridge → SNS 이메일 |
-| 지표 | Prometheus: AI 서버(Alloy), DB·제어 서버(node_exporter), MySQL(mysqld_exporter, TLS), ProxySQL |
-| 로그 | Loki: AI 컨테이너 로그(Alloy). Backend 로그는 CloudWatch Logs를 Grafana에서 조회 |
-| 대시보드 | Grafana: 서비스 개요, AI 서버, DB |
-| 알림 규칙 | Grafana 15개 (ECS 태스크 수, DB 접속·쓰기 가능 DB 수·복제, ProxySQL 쓰기 경로, 디스크·메모리, 수집 중단) → Discord |
+| 지표 | Prometheus: AI 서버(Alloy), DB·제어 서버(node_exporter), MySQL(mysqld_exporter, TLS), ProxySQL, RunPod GPU·vLLM(Pod 안 Alloy) |
+| 로그 | Loki: AI 컨테이너 로그, vLLM 로그(Alloy). Backend 로그는 CloudWatch Logs를 Grafana에서 조회 |
+| 대시보드 | Grafana: 서비스 개요, AI 서버, DB, GPU |
+| 알림 규칙 | Grafana 19개 (ECS 태스크 수, DB 접속·쓰기 가능 DB 수·복제, ProxySQL 쓰기 경로, 디스크·메모리, 수집 중단, GPU 수집·온도·vLLM 대기열·거부) → Discord |
 | 접속 | `grafana.memme.kr`, Cloudflare Access 이메일 인증으로 팀원만 접근 |
 
-CloudWatch 알람은 모니터링 서버가 멈춰도 동작하도록 백업 경로로 유지합니다. 모니터링 서버 설정 파일은 아직 이 저장소에 포함하지 않았습니다.
+CloudWatch 알람은 모니터링 서버가 멈춰도 동작하도록 백업 경로로 유지합니다. 모니터링 서버 설정, 대시보드, 수집기 설정, 재구성 절차는 [monitoring/README.md](monitoring/README.md)에 있습니다.
 
 ## 디렉터리 구조
 
@@ -97,6 +97,14 @@ deploy/
 ├── resolve-latest-ci.py        # 서비스 저장소 dev 최신 커밋의 CI 성공 여부 확인
 ├── backend/                    # V1 Backend EC2 배포 기록 (V2에서는 사용하지 않음)
 └── frontend/
+
+monitoring/                     # V2 모니터링 (README에 구성·재구성 절차)
+├── server/                     # 모니터링 서버 /opt/monitoring: compose, Prometheus, Loki, Grafana 프로비저닝
+├── dashboards/                 # Grafana 대시보드 4개
+├── alloy/                      # AI 서버·RunPod GPU Pod 수집기 설정
+├── alerting-api/               # Grafana API로 만든 GPU 알림 기록본
+├── cloudwatch/                 # CloudWatch 알람·SNS·ECS 중지 이벤트 생성 스크립트
+└── ec2/                        # 모니터링 EC2 생성·부팅 스크립트
 
 docs/
 ├── CD.md                       # CD 실행·변수·권한 가이드
