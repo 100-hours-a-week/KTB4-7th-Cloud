@@ -13,7 +13,7 @@ RunPod GPU Pod(Alloy) ─ ingest.memme.kr(Access 서비스 토큰) ────�
 │                        ├─ Loki (14일)        ← AI 서버 Alloy, GPU Pod Alloy                          │
 │                        └─ CloudWatch 데이터소스 (ALB·ECS·EC2·Redis 지표, Backend 로그)                 │
 └──────────────────────────────────────────────────────────────────────────────────────┘
-알림: Grafana 규칙 19개 → Discord / CloudWatch 알람 14개 → SNS → 이메일 (모니터링 서버 장애 대비 백업)
+알림: Grafana 규칙 27개 → Discord / CloudWatch 알람 4개 → SNS → 이메일 (모니터링 서버 장애 대비 백업)
 ```
 
 ## 디렉터리
@@ -22,10 +22,11 @@ RunPod GPU Pod(Alloy) ─ ingest.memme.kr(Access 서비스 토큰) ────�
 |---|---|
 | `server/` | 모니터링 서버 `/opt/monitoring`에 그대로 두는 파일. compose, Prometheus, Loki, Grafana 프로비저닝(데이터소스, Discord 연락처, 알림 규칙 15개) |
 | `alerting-api/gpu-rules.yaml` | Grafana API로 만든 GPU 알림 4개의 기록본(서버 프로비저닝 폴더에 넣지 않음) |
+| `alerting-api/aws-rules.yaml` | Grafana API로 만든 AWS 지표(ALB·Redis·EC2) 알림 8개의 요약 기록본 |
 | `dashboards/` | Grafana 대시보드 5개: 서비스 개요, BE 앱, AI 서버, DB, GPU. 모두 배포(파랑)·비정상 태스크 중지(빨강) 표시 포함 |
 | `alloy/ai-server.alloy` | AI EC2의 `memme-alloy` 컨테이너 설정 (`/opt/alloy/config.alloy`) |
 | `alloy/gpu-pod/` | RunPod Pod 수집기 설정·시작 스크립트·AI팀 안내 |
-| `cloudwatch/` | CloudWatch 알람·SNS·ECS 중지 이벤트 생성 스크립트 (CloudShell 실행) |
+| `cloudwatch/` | CloudWatch 알람·SNS·ECS 중지 이벤트 초기 생성 스크립트 (CloudShell 실행). 2026-10-22 정리 후 알람 4개만 남기고 ECS 중지 이벤트는 삭제했습니다 |
 | `ec2/` | 모니터링 EC2 생성 스크립트와 부팅 스크립트, ECS 조회 권한(`ecs-read-policy.json`) |
 | `server/ecs-discovery/` | BE ECS 태스크 위치를 Prometheus 대상 파일로 쓰고 배포·태스크 중지를 Grafana 표시로 남기는 스크립트 |
 
@@ -53,8 +54,9 @@ RunPod GPU Pod(Alloy) ─ ingest.memme.kr(Access 서비스 토큰) ────�
 | ProxySQL | 수집 실패, 쓰기 hostgroup ONLINE 0개, 연결 한도 초과 거부 |
 | 서버 | 디스크, 메모리, 지표 수집 중단 |
 | GPU | 수집 중단, 온도 85℃, vLLM 대기열 적체, vLLM 요청 거부 |
+| AWS | ALB 정상 웹 서버 2개 미만·0개, ALB 5xx, 백엔드 5xx, 응답 시간 p95, Redis 메모리·eviction, EC2 상태 검사(인스턴스별) |
 
-CloudWatch 알람(ALB 정상 대상 수·5xx·p95, EC2 상태 검사, Redis 메모리·eviction, AI 서버 메모리·디스크, 모니터링 서버 상태)은 이메일로 보냅니다. 기준값은 임시값이며 운영 데이터를 보고 조정합니다.
+Discord가 기본 경로입니다. CloudWatch 이메일 알람은 모니터링 서버가 멈춰도 알 수 있도록 서비스 전체 중단, DB .185·.65 상태 검사, 모니터링 서버 상태 검사 4개만 남겼습니다. 배포 때마다 오던 ECS 태스크 중지 메일은 삭제했습니다. 기준값은 임시값이며 운영 데이터를 보고 조정합니다.
 
 ## 비밀값
 
@@ -75,12 +77,12 @@ CloudWatch 알람(ALB 정상 대상 수·5xx·p95, EC2 상태 검사, Redis 메�
 1. `ec2/launch-monitoring-ec2.sh`로 EC2를 만듭니다(역할 `memme-v2-monitoring-role`: SSM, CloudWatch 읽기). SSM 엔드포인트 SG에 모니터링 SG 443 허용이 필요합니다.
 2. `server/`를 `/opt/monitoring`에 복사하고 `.env`를 채웁니다. Parameter Store 값은 서버에서 `amazon/aws-cli` 컨테이너로 읽어 화면에 출력하지 않습니다.
 3. `mysqld-exporter.cnf`를 만들고(`[client] user=memme_monitor`, `password=`, `ssl-ca=/cfg/ca.pem`), 공개 CA를 `mysql-ca.pem`으로 둡니다.
-4. `docker compose up -d` 후 대시보드 4개를 Grafana에 가져오고(Import), `alerting-api/gpu-rules.yaml`의 GPU 규칙을 다시 만듭니다.
+4. `docker compose up -d` 후 대시보드 4개를 Grafana에 가져오고(Import), `alerting-api/`의 GPU·AWS 규칙을 다시 만듭니다.
 5. Prometheus 설정을 바꾼 뒤에는 `curl -X POST localhost:9090/-/reload`, 알림·데이터소스 파일을 바꾼 뒤에는 `docker compose up -d --force-recreate grafana`를 실행합니다.
 
 ## 남은 일
 
 - Backend 로그 Loki 수집 (Backend 배포 시 FireLens 추가)
 - Backend·AI `request_id` 연결
-- ProxySQL hostgroup 20 SHUNNED 상태의 설계상 정상 여부 확인 후 알림 반영
+- ProxySQL hostgroup 20 SHUNNED: 쿼리 규칙이 없어 서비스 영향이 없으므로 알림에서 제외했습니다. 1-C 자동 전환 재시험 전에 정리합니다
 - 모니터링 서버·수집 구성의 Terraform 반영
