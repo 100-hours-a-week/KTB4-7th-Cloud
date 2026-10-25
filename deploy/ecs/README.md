@@ -8,7 +8,7 @@ GitHub Actions의 **Deploy Backend ECS**를 main에서 수동 실행한다.
 | --- | --- |
 | mode=deploy | Backend CI가 이미 올린 이미지로 정상 배포. 저장소 변수 `BACKEND_ECS_CD_ENABLED=true`일 때만 실행 |
 | mode=rollback | 기록해 둔 정상 task definition으로 복구 |
-| target | `all`은 웹 → 배치 순서로 배포(롤백 불가). `web`·`batch`는 그 서비스만 |
+| target | `all`은 웹과 배치를 동시에 배포(롤백 불가). 웹이 통과하지 못하면 이미 바뀐 배치를 직전 revision으로 자동 복구(`batch_restore`). 배치만 실패하면 웹은 그대로 두고 배치를 수동 rollback. `web`·`batch`는 그 서비스만 |
 | source_sha | Backend의 전체 40자리 commit SHA. 기본값 없음. ECR에서 digest를 확인해 고정 |
 | task_definition | `memme-backend-v2:16`, `memme-backend-batch-v2:7`처럼 선택한 대상의 정확한 revision. 최신 이미지 재배포를 사용하지 않음 |
 

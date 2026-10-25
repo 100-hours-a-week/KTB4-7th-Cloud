@@ -9,7 +9,7 @@ on:
         type: choice
         options: [deploy, rollback]
       target:
-        description: all deploys web then batch; rollback restores one target
+        description: all deploys web and batch together; rollback restores one target
         required: true
         type: choice
         options: [all, web, batch]

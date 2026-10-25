@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ACCOUNT = '613538400341'
@@ -280,16 +281,33 @@ def execute(mode, source_sha=None, revision=None, *, kind='web', aws=None, sleep
 
 
 def deploy_all(source_sha, **options):
-    """Web first; batch only after every web check passed on the same source SHA."""
+    """Web and batch roll out together on the same source SHA.
+
+    Running them in parallel removes the batch wait after web (about four minutes). If web does not pass,
+    a batch that already moved is restored to its recorded revision so the two never stay on different code.
+    """
     report = {'mode': 'deploy', 'target': 'all', 'status': 'FAIL'}
-    for kind in ('web', 'batch'):
+
+    def run(kind):
         try:
-            report[kind] = execute('deploy', source_sha, kind=kind, **options)
+            return execute('deploy', source_sha, kind=kind, **options)
         except DeploymentError as error:
-            report[kind] = error.report or {'status': 'FAIL', 'error': str(error)}
-            if kind == 'web':
-                report['batch'] = {'status': 'SKIPPED', 'reason': 'web deployment did not pass'}
-            raise DeploymentError(f'{kind} deployment failed', report) from None
+            return error.report or {'status': 'FAIL', 'error': str(error)}
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = {kind: pool.submit(run, kind) for kind in ('web', 'batch')}
+        for kind, future in futures.items():
+            report[kind] = future.result()
+    # 'task_definition' is recorded only once batch update-service was attempted.
+    if report['web'].get('status') != 'PASS' and report['batch'].get('task_definition'):
+        try:
+            report['batch_restore'] = execute('rollback', revision=report['batch']['previous_task_definition'],
+                                              kind='batch', **options)
+        except DeploymentError as error:
+            report['batch_restore'] = error.report or {'status': 'FAIL', 'error': str(error)}
+    failed = [kind for kind in ('web', 'batch') if report[kind].get('status') != 'PASS']
+    if failed:
+        raise DeploymentError(f"{' and '.join(failed)} deployment failed", report)
     report['status'] = 'PASS'
     return report
 

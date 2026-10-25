@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import unittest
 import subprocess
+import threading
 from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'deploy/ecs/deploy_backend.py'
@@ -336,25 +337,65 @@ class EcsBatchDeploymentTests(unittest.TestCase):
         self.assertEqual(aws.calls, [])
         self.assertEqual(MODULE.definition_arn('memme-backend-batch-v2:7', 'batch'), BOLD)
 
-    def test_all_deploys_batch_only_after_web_passes(self):
-        web, batch = FakeAws(), FakeBatchAws()
+    def all_execute(self, web, batch, batch_started=None):
         original = MODULE.execute
-        def execute(mode, source_sha, kind, **_):
-            return original(mode, source_sha, kind=kind, aws=web if kind == 'web' else batch)
-        with patch.object(MODULE, 'execute', side_effect=execute):
+        def execute(mode, source_sha=None, revision=None, *, kind, **_):
+            if kind == 'batch' and batch_started is not None:
+                batch_started.set()
+            if kind == 'web' and batch_started is not None:
+                # Web only proceeds once batch is running at the same time.
+                self.assertTrue(batch_started.wait(5), 'batch did not start while web was deploying')
+            return original(mode, source_sha, revision, kind=kind, aws=web if kind == 'web' else batch)
+        return patch.object(MODULE, 'execute', side_effect=execute)
+
+    def test_all_deploys_web_and_batch_together(self):
+        web, batch, started = FakeAws(), FakeBatchAws(), threading.Event()
+        with self.all_execute(web, batch, started):
             report = MODULE.deploy_all(SHA)
         self.assertEqual((report['status'], report['web']['status'], report['batch']['status']), ('PASS', 'PASS', 'PASS'))
+        self.assertEqual((web.current, batch.current), (NEW, BNEW))
+        self.assertNotIn('batch_restore', report)
 
-    def test_all_skips_batch_when_web_business_smoke_fails(self):
+    def test_all_restores_batch_when_web_business_smoke_fails(self):
         web, batch = FakeAws(functional_failure=True), FakeBatchAws()
-        original = MODULE.execute
-        def execute(mode, source_sha, kind, **_):
-            return original(mode, source_sha, kind=kind, aws=web if kind == 'web' else batch)
-        with patch.object(MODULE, 'execute', side_effect=execute):
+        with self.all_execute(web, batch):
             with self.assertRaises(MODULE.DeploymentError) as failed:
                 MODULE.deploy_all(SHA)
-        self.assertEqual(failed.exception.report['batch']['status'], 'SKIPPED')
-        self.assertEqual(batch.calls, [])
+        report = failed.exception.report
+        self.assertEqual((report['web']['status'], report['batch']['status']), ('FAIL', 'PASS'))
+        self.assertEqual(report['batch_restore']['status'], 'PASS')
+        self.assertEqual(report['batch_restore']['task_definition'], BOLD)
+        self.assertEqual(batch.current, BOLD)
+        self.assertEqual(sum(op == 'register-task-definition' for _, op, _ in batch.calls), 1)
+
+    def test_all_restores_batch_when_web_refuses_a_broken_baseline(self):
+        web, batch = FakeAws(broken_baseline=True), FakeBatchAws()
+        with self.all_execute(web, batch):
+            with self.assertRaises(MODULE.DeploymentError) as failed:
+                MODULE.deploy_all(SHA)
+        self.assertFalse(any(op == 'update-service' for _, op, _ in web.calls))
+        self.assertEqual(failed.exception.report['batch_restore']['status'], 'PASS')
+        self.assertEqual(batch.current, BOLD)
+
+    def test_all_does_not_restore_batch_that_never_moved(self):
+        web, batch = FakeAws(functional_failure=True), FakeBatchAws(maximum=200)
+        with self.all_execute(web, batch):
+            with self.assertRaises(MODULE.DeploymentError) as failed:
+                MODULE.deploy_all(SHA)
+        report = failed.exception.report
+        self.assertNotIn('batch_restore', report)
+        self.assertFalse(any(op == 'update-service' for _, op, _ in batch.calls))
+        self.assertIn('web and batch', str(failed.exception))
+
+    def test_all_keeps_passing_web_when_only_batch_fails(self):
+        web, batch = FakeAws(), FakeBatchAws(maximum=200)
+        with self.all_execute(web, batch):
+            with self.assertRaises(MODULE.DeploymentError) as failed:
+                MODULE.deploy_all(SHA)
+        report = failed.exception.report
+        self.assertEqual((report['web']['status'], report['batch']['status']), ('PASS', 'FAIL'))
+        self.assertEqual(web.current, NEW)
+        self.assertNotIn('batch_restore', report)
 
 
 class ContainerOverrideTests(unittest.TestCase):
