@@ -13,7 +13,7 @@ RunPod GPU Pod(Alloy) ─ ingest.memme.kr(Access 서비스 토큰) ────�
 │                        ├─ Loki (14일)        ← AI 서버 Alloy, GPU Pod Alloy                          │
 │                        └─ CloudWatch 데이터소스 (ALB·ECS·EC2·Redis 지표, Backend 로그)                 │
 └──────────────────────────────────────────────────────────────────────────────────────┘
-알림: Grafana 규칙 28개 → Discord / CloudWatch 알람 4개 → SNS → 이메일 (모니터링 서버 장애 대비 백업)
+알림: Grafana 규칙 37개 → Discord / CloudWatch 알람 4개 → SNS → 이메일 (모니터링 서버 장애 대비 백업)
 ```
 
 ## 디렉터리
@@ -49,7 +49,7 @@ RunPod GPU Pod(Alloy) ─ ingest.memme.kr(Access 서비스 토큰) ────�
 | 영역 | Grafana 규칙 (Discord) |
 |---|---|
 | ECS | 웹 태스크 부족, 배치 태스크 없음, 웹 CPU·메모리 |
-| BE 앱 | 지표 수집 중단, DB 연결 대기 2분, 요청 스레드 80% 이상 |
+| BE 앱 | 일반 API 1초 99%, 무거운 작업 3초 95%의 빠른(1시간)/느린(6시간) 소진, AI 생성 실패율, 5xx 비율(스캐너 제외), DB 연결 대기 2분, 요청 스레드 80% 이상. BE 지표 배포 전에는 데이터 없음으로 정상 |
 | DB | 접속 실패, 쓰기 가능 DB 수 ≠ 1, 복제 중지, 복제 지연 30초, 연결 사용률 |
 | ProxySQL | 수집 실패, 쓰기 hostgroup ONLINE 0개, 연결 한도 초과 거부 |
 | 서버 | 디스크, 메모리, 지표 수집 중단 |

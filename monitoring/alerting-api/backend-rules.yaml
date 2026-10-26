@@ -1,4 +1,18 @@
-# memme V2 BE 앱 알림 → 기본 정책(discord-memme). Grafana API로 만든 그룹 backend의 기록본(uid 충돌 주의, gpu-rules.yaml 참고)
+# memme V2 BE 앱 알림 → 기본 정책(discord-memme). Grafana API로 만든 그룹 backend의 요약 기록본(2026-10-26)
+# 근거: Google SRE Workbook(오류 예산 소진 알림, 요청 등급별 목표), AWS 권장 알람(5xx 약 5%), Prometheus 히스토그램 가이드(버킷 비율)
+# BE 지표(Actuator, BE PR #580) 배포 전에는 데이터가 없어 정상으로 둔다(noDataState: OK). 파일 관리로 옮길 때는 API 규칙을 먼저 지운다(uid 충돌)
+#
+# 공통 선택자: job="backend", service="web"
+# 제외(EXCL): /actuator.*, /health, UNKNOWN, NOT_FOUND, REDIRECTION, root, /**  (존재하지 않는 경로를 찌르는 스캐너 등)
+# AI 등급: /v1/solutions/today/retries, /v1/chat/messages, /v2/menu-image-batches.*  (AI 클라이언트 호출)
+# 무거운 작업 등급: /v2/sales/profit-analyses, /v1/sales/analyses.*, /v2/sales/analyses/month-options, /v1/sales/uploads,
+#   /v1/sales/uploads/{uploadId}/analysis-retries, /v2/sales/uploads/{uploadId}/cost-items, /v1/auth/login, /v1/auth/signup/account,
+#   /v1/auth/password-reset, /v1/users/me/password, /v1/addresses/search, /v1/auth/business-verifications  (BCrypt, 외부 API, 무거운 조회)
+# 일반 등급: 위 셋을 뺀 나머지
+#
+# 지연 규칙: A = sum(increase(http_server_requests_seconds_bucket{등급, le}[창])), B = sum(increase(..._count{등급}[창])),
+#           F = (1 - A/B) * 100, C = B >= 최소요청 && F > 기준
+# 오류 규칙: A = sum(increase(..._count{등급, status=~"5.."}[창])) or vector(0), B = 같은 창 전체, F = A/B*100, C = B >= 최소요청 && F > 기준
 apiVersion: 1
 
 groups:
@@ -7,56 +21,13 @@ groups:
     folder: memme-v2 알림
     interval: 1m
     rules:
-      - uid: memme-be-scrape
-        title: BE 앱 지표 수집 중단
-        condition: C
-        data:
-          - refId: A
-            relativeTimeRange: { from: 600, to: 0 }
-            datasourceUid: prometheus
-            model: { refId: A, instant: true, expr: 'count(up{job="backend",service="web"} == 1) or vector(0)' }
-          - refId: C
-            datasourceUid: __expr__
-            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: lt, params: [2] } } ] }
-        for: 5m
-        noDataState: Alerting
-        execErrState: Error
-        labels: { area: backend }
-        annotations:
-          summary: "BE 웹 태스크 지표가 2개 미만으로 수집됩니다. ecs-discovery 로그, 관리 포트 8081 SG, 태스크 상태 확인"
-
-      - uid: memme-be-pool-pending
-        title: BE DB 연결 대기 발생
-        condition: C
-        data:
-          - refId: A
-            relativeTimeRange: { from: 600, to: 0 }
-            datasourceUid: prometheus
-            model: { refId: A, instant: true, expr: 'max(max_over_time(hikaricp_connections_pending{job="backend",service="web"}[2m]))' }
-          - refId: C
-            datasourceUid: __expr__
-            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: gt, params: [0] } } ] }
-        for: 2m
-        noDataState: OK
-        execErrState: Error
-        labels: { area: backend }
-        annotations:
-          summary: "BE 웹의 DB 연결을 기다리는 요청이 2분 넘게 있습니다. BE 앱 대시보드에서 느린 API와 연결 풀 확인"
-
-      - uid: memme-be-threads
-        title: BE 요청 스레드 80% 이상 사용
-        condition: C
-        data:
-          - refId: A
-            relativeTimeRange: { from: 600, to: 0 }
-            datasourceUid: prometheus
-            model: { refId: A, instant: true, expr: 'max(tomcat_threads_busy_threads{job="backend",service="web",name=~".*8080.*"} / tomcat_threads_config_max_threads{job="backend",service="web",name=~".*8080.*"})' }
-          - refId: C
-            datasourceUid: __expr__
-            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: gt, params: [0.8] } } ] }
-        for: 2m
-        noDataState: OK
-        execErrState: Error
-        labels: { area: backend }
-        annotations:
-          summary: "BE 웹 Tomcat 요청 스레드가 80% 이상 찼습니다. 계속되면 /health도 늦어져 태스크가 교체됩니다. 요청 폭주·느린 API 확인"
+      - { uid: memme-be-normal-latency-fast, title: "일반 API 응답 지연: 빠른 소진 (1시간)", slo: "99% 1초 안", window: 1h, le: "1.0", min_requests: 30, condition: "1초 초과 > 14.4%", for: 0m }
+      - { uid: memme-be-normal-latency-slow, title: "일반 API 응답 지연: 느린 소진 (6시간)", slo: "99% 1초 안", window: 6h, le: "1.0", min_requests: 60, condition: "1초 초과 > 6%", for: 0m }
+      - { uid: memme-be-heavy-latency-fast, title: "무거운 작업 응답 지연: 빠른 소진 (1시간)", slo: "95% 3초 안", window: 1h, le: "3.0", min_requests: 30, condition: "3초 초과 > 72%", for: 0m }
+      - { uid: memme-be-heavy-latency-slow, title: "무거운 작업 응답 지연: 느린 소진 (6시간)", slo: "95% 3초 안", window: 6h, le: "3.0", min_requests: 60, condition: "3초 초과 > 30%", for: 0m }
+      - { uid: memme-be-ai-failure-fast, title: "AI 생성 실패: 빠른 소진 (1시간)", slo: "성공 95%", window: 1h, min_requests: 5, condition: "5xx > 72%", for: 0m }
+      - { uid: memme-be-ai-failure-slow, title: "AI 생성 실패: 느린 소진 (6시간)", slo: "성공 95%", window: 6h, min_requests: 10, condition: "5xx > 30%", for: 0m }
+      - { uid: memme-be-5xx-ratio, title: "BE 5xx 비율 (1시간, 스캐너 제외)", window: 1h, min_requests: 30, condition: "5xx > 5% (AWS 권장 시작값)", for: 0m }
+      - { uid: memme-be-pool-pending, title: BE DB 연결 대기 발생, expr: 'max(max_over_time(hikaricp_connections_pending{job="backend",service="web"}[2m]))', condition: "> 0", for: 2m }
+      - { uid: memme-be-threads, title: BE 요청 스레드 80% 이상 사용, expr: 'max(tomcat_threads_busy_threads{job="backend",service="web",name=~".*8080.*"} / tomcat_threads_config_max_threads{job="backend",service="web",name=~".*8080.*"}) * 100', condition: "> 80", for: 2m }
+# 보류: memme-be-scrape(BE 앱 지표 수집 중단, 웹 지표 2개 미만 5분). 지금 만들면 BE 지표 배포 전까지 계속 울려서 배포 후 추가
