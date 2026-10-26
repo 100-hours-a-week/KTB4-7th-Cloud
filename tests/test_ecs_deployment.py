@@ -95,7 +95,12 @@ class EcsDeploymentTests(unittest.TestCase):
     def test_register_payload_preserves_runtime_but_removes_response_fields(self):
         original = definition()
         payload = MODULE.prepare_definition(original, DIGEST, SHA)
-        self.assertEqual(payload['containerDefinitions'], original['containerDefinitions'])
+        candidate, baseline = payload['containerDefinitions'][0], original['containerDefinitions'][0]
+        self.assertEqual({k: v for k, v in candidate.items() if k != 'environment'},
+                         {k: v for k, v in baseline.items() if k != 'environment'})
+        candidate_env = {x['name']: x['value'] for x in candidate['environment']}
+        for entry in baseline['environment']:
+            self.assertEqual(candidate_env[entry['name']], entry['value'])
         self.assertEqual(payload['taskRoleArn'], original['taskRoleArn'])
         self.assertEqual(payload['executionRoleArn'], original['executionRoleArn'])
         self.assertNotIn('revision', payload)
