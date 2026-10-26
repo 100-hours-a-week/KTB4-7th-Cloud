@@ -1,5 +1,5 @@
 # memme V2 Grafana 알림 규칙 → 기본 정책(discord-memme)
-# 주의: Grafana 프로비저닝 파일은 $VAR를 환경변수로 치환하므로 템플릿 변수는 $$labels·$$values로 적는다
+# 주의: Grafana 11.4 알림 프로비저닝 파일은 환경변수 치환을 하지 않습니다($$가 그대로 저장돼 템플릿 오류가 났음, 10/26 확인). 템플릿 변수는 $labels·$values로 적는다
 apiVersion: 1
 
 groups:
@@ -39,7 +39,7 @@ groups:
         execErrState: Error
         labels: { severity: critical, area: ecs }
         annotations:
-          summary: "웹 서비스 실행 태스크가 2개 미만입니다 (현재 {{ $$values.B }}개)"
+          summary: "웹 서비스 실행 태스크가 2개 미만입니다 (현재 {{ $values.B }}개)"
           description: "memme-v2/memme-backend-v2 LiveTaskCount 최소값이 3분 이상 2 미만입니다. ECS 서비스 이벤트와 중지 태스크 사유를 확인하세요."
 
       - uid: memme-ecs-batch-task
@@ -88,7 +88,7 @@ groups:
         execErrState: Error
         labels: { severity: warning, area: ecs }
         annotations:
-          summary: "웹 서비스 평균 CPU가 10분 이상 80%를 넘었습니다 (현재 {{ $$values.B }}%)"
+          summary: "웹 서비스 평균 CPU가 10분 이상 80%를 넘었습니다 (현재 {{ $values.B }}%)"
 
       - uid: memme-ecs-web-memory
         title: ECS 웹 메모리 높음
@@ -112,7 +112,7 @@ groups:
         execErrState: Error
         labels: { severity: warning, area: ecs }
         annotations:
-          summary: "웹 서비스 평균 메모리가 10분 이상 85%를 넘었습니다 (현재 {{ $$values.B }}%)"
+          summary: "웹 서비스 평균 메모리가 10분 이상 85%를 넘었습니다 (현재 {{ $values.B }}%)"
 
   # ---------- DB 복제 (mysqld_exporter /probe, job=mysql) ----------
   - orgId: 1
@@ -136,7 +136,7 @@ groups:
         execErrState: Error
         labels: { severity: critical, area: db }
         annotations:
-          summary: "MySQL {{ $$labels.instance }}에 접속할 수 없습니다"
+          summary: "MySQL {{ $labels.instance }}에 접속할 수 없습니다"
           description: "모니터링 계정의 /probe 결과 mysql_up=0이 2분 이상 이어졌습니다. 인스턴스 상태와 mysqld 프로세스를 확인하세요."
 
       - uid: memme-db-writable-count
@@ -155,7 +155,7 @@ groups:
         execErrState: Error
         labels: { severity: critical, area: db }
         annotations:
-          summary: "read_only=0인 DB가 {{ $$values.A }}개입니다 (정상 1개)"
+          summary: "read_only=0인 DB가 {{ $values.A }}개입니다 (정상 1개)"
           description: "0개면 쓰기 가능한 Primary가 없고, 2개면 두 DB 모두 쓰기 가능(분리 위험)입니다. 현재 기준 Primary .185, Replica .65."
 
       - uid: memme-db-replication-stopped
@@ -177,7 +177,7 @@ groups:
         execErrState: Error
         labels: { severity: critical, area: db }
         annotations:
-          summary: "Replica {{ $$labels.instance }}의 복제 IO 또는 SQL 스레드가 멈췄습니다"
+          summary: "Replica {{ $labels.instance }}의 복제 IO 또는 SQL 스레드가 멈췄습니다"
           description: "SHOW REPLICA STATUS의 Last_IO_Error·Last_SQL_Error를 확인하세요. 복제 상태 지표가 사라져도 이 알림이 발생합니다."
 
       - uid: memme-db-replication-lag
@@ -196,7 +196,7 @@ groups:
         execErrState: Error
         labels: { severity: warning, area: db }
         annotations:
-          summary: "Replica {{ $$labels.instance }} 복제 지연 {{ $$values.A }}초 (2분 이상 30초 초과)"
+          summary: "Replica {{ $labels.instance }} 복제 지연 {{ $values.A }}초 (2분 이상 30초 초과)"
 
       - uid: memme-db-connections
         title: MySQL 연결 수 높음
@@ -217,7 +217,7 @@ groups:
         execErrState: Error
         labels: { severity: warning, area: db }
         annotations:
-          summary: "MySQL {{ $$labels.instance }} 연결 사용률 {{ $$values.A }}% (5분 이상 80% 초과, 한도 120)"
+          summary: "MySQL {{ $labels.instance }} 연결 사용률 {{ $values.A }}% (5분 이상 80% 초과, 한도 120)"
 
   # ---------- ProxySQL (제어 서버 10.0.11.9:6070) ----------
   - orgId: 1
@@ -283,7 +283,7 @@ groups:
         execErrState: Error
         labels: { severity: warning, area: proxysql }
         annotations:
-          summary: "ProxySQL이 최근 5분간 연결 {{ $$values.A }}건을 한도({{ $$values.B }}) 초과로 거부했습니다"
+          summary: "ProxySQL이 최근 5분간 연결 {{ $values.A }}건을 한도({{ $values.B }}) 초과로 거부했습니다"
           description: "10/21~22 롤링 배포·요청 폭주 때 발생했습니다(당시 한도 32, 10/25에 64로 상향). 배포 중이 아니면 요청 폭주, 연결 누수, 풀 설정을 확인하세요."
 
   # ---------- 호스트 (DB·제어·모니터링: node_exporter job=node, AI 서버: Alloy host=ai-server) ----------
@@ -311,7 +311,7 @@ groups:
         execErrState: Error
         labels: { severity: warning, area: host }
         annotations:
-          summary: "{{ $$labels.host }} 서버 지표를 2분 이상 수집하지 못했습니다"
+          summary: "{{ $labels.host }} 서버 지표를 2분 이상 수집하지 못했습니다"
           description: "DB·제어 서버는 node_exporter 서비스(systemctl status node_exporter)와 SG 9100, AI 서버는 memme-alloy 컨테이너를 확인하세요."
 
       - uid: memme-host-disk
@@ -334,7 +334,7 @@ groups:
         execErrState: Error
         labels: { severity: warning, area: host }
         annotations:
-          summary: "{{ $$labels.host }} {{ $$labels.mountpoint }} 디스크 사용률 {{ $$values.A }}% (85% 초과)"
+          summary: "{{ $labels.host }} {{ $labels.mountpoint }} 디스크 사용률 {{ $values.A }}% (85% 초과)"
           description: "DB /data는 MySQL 데이터·이진 로그, DB 루트는 /var/lib/memme-backups 백업, AI 서버는 옛 이미지·컨테이너 로그가 주로 쌓입니다."
 
       - uid: memme-host-memory
@@ -356,4 +356,4 @@ groups:
         execErrState: Error
         labels: { severity: warning, area: host }
         annotations:
-          summary: "{{ $$labels.host }} 메모리 사용률 {{ $$values.A }}% (10분 이상 90% 초과)"
+          summary: "{{ $labels.host }} 메모리 사용률 {{ $values.A }}% (10분 이상 90% 초과)"
