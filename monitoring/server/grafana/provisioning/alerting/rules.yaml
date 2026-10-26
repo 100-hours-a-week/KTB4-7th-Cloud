@@ -271,6 +271,10 @@ groups:
             relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: prometheus
             model: { refId: A, instant: true, expr: 'sum(increase(proxysql_access_denied_max_connections_total[5m]))' }
+          - refId: B   # 현재 한도(mysql-max_connections). 문구에 고정값을 쓰지 않도록 지표에서 읽음
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: B, instant: true, expr: 'max(proxysql_mysql_max_connections)' }
           - refId: C
             datasourceUid: __expr__
             model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: gt, params: [0] } } ] }
@@ -279,8 +283,8 @@ groups:
         execErrState: Error
         labels: { severity: warning, area: proxysql }
         annotations:
-          summary: "ProxySQL이 최근 5분간 연결 {{ $$values.A }}건을 한도(32) 초과로 거부했습니다"
-          description: "롤링 배포 중 새 태스크가 기존 연결과 겹칠 때 발생해 왔습니다. 배포 중이 아니면 연결 누수나 풀 설정을 확인하세요."
+          summary: "ProxySQL이 최근 5분간 연결 {{ $$values.A }}건을 한도({{ $$values.B }}) 초과로 거부했습니다"
+          description: "10/21~22 롤링 배포·요청 폭주 때 발생했습니다(당시 한도 32, 10/25에 64로 상향). 배포 중이 아니면 요청 폭주, 연결 누수, 풀 설정을 확인하세요."
 
   # ---------- 호스트 (DB·제어·모니터링: node_exporter job=node, AI 서버: Alloy host=ai-server) ----------
   - orgId: 1
