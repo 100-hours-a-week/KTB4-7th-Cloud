@@ -1110,5 +1110,55 @@
    }
   }
  ],
- "description": "mysqld_exporter(모니터링 서버, TLS 검증) + ProxySQL 내장 지표 + CloudWatch EC2"
+ "description": "mysqld_exporter(모니터링 서버, TLS 검증) + ProxySQL 내장 지표 + CloudWatch EC2",
+ "annotations": {
+  "list": [
+   {
+    "builtIn": 1,
+    "datasource": {
+     "type": "grafana",
+     "uid": "-- Grafana --"
+    },
+    "enable": true,
+    "hide": true,
+    "iconColor": "rgba(0, 211, 255, 1)",
+    "name": "Annotations & Alerts",
+    "type": "dashboard"
+   },
+   {
+    "datasource": {
+     "type": "grafana",
+     "uid": "-- Grafana --"
+    },
+    "enable": true,
+    "iconColor": "#5794F2",
+    "name": "배포",
+    "target": {
+     "type": "tags",
+     "tags": [
+      "deploy"
+     ],
+     "limit": 100,
+     "matchAny": false
+    }
+   },
+   {
+    "datasource": {
+     "type": "grafana",
+     "uid": "-- Grafana --"
+    },
+    "enable": true,
+    "iconColor": "#F2495C",
+    "name": "태스크 중지",
+    "target": {
+     "type": "tags",
+     "tags": [
+      "task-stop"
+     ],
+     "limit": 100,
+     "matchAny": false
+    }
+   }
+  ]
+ }
 }

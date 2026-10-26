@@ -22,11 +22,12 @@ RunPod GPU Pod(Alloy) ─ ingest.memme.kr(Access 서비스 토큰) ────�
 |---|---|
 | `server/` | 모니터링 서버 `/opt/monitoring`에 그대로 두는 파일. compose, Prometheus, Loki, Grafana 프로비저닝(데이터소스, Discord 연락처, 알림 규칙 15개) |
 | `alerting-api/gpu-rules.yaml` | Grafana API로 만든 GPU 알림 4개의 기록본(서버 프로비저닝 폴더에 넣지 않음) |
-| `dashboards/` | Grafana 대시보드 4개: 서비스 개요, AI 서버, DB, GPU |
+| `dashboards/` | Grafana 대시보드 5개: 서비스 개요, BE 앱, AI 서버, DB, GPU. 모두 배포(파랑)·비정상 태스크 중지(빨강) 표시 포함 |
 | `alloy/ai-server.alloy` | AI EC2의 `memme-alloy` 컨테이너 설정 (`/opt/alloy/config.alloy`) |
 | `alloy/gpu-pod/` | RunPod Pod 수집기 설정·시작 스크립트·AI팀 안내 |
 | `cloudwatch/` | CloudWatch 알람·SNS·ECS 중지 이벤트 생성 스크립트 (CloudShell 실행) |
-| `ec2/` | 모니터링 EC2 생성 스크립트와 부팅 스크립트 |
+| `ec2/` | 모니터링 EC2 생성 스크립트와 부팅 스크립트, ECS 조회 권한(`ecs-read-policy.json`) |
+| `server/ecs-discovery/` | BE ECS 태스크 위치를 Prometheus 대상 파일로 쓰고 배포·태스크 중지를 Grafana 표시로 남기는 스크립트 |
 
 ## 수집 대상
 
@@ -34,6 +35,8 @@ RunPod GPU Pod(Alloy) ─ ingest.memme.kr(Access 서비스 토큰) ────�
 |---|---|---|
 | ALB, ECS, EC2 상태, Redis | AWS 기본 지표 | CloudWatch (Grafana가 직접 조회) |
 | Backend 로그 | ECS awslogs `/ecs/memme/backend-v2` | CloudWatch Logs |
+| Backend 앱 지표 (API별 지연·오류, DB 연결 풀, Tomcat 스레드, JVM) | Spring Boot Actuator 관리 포트 `8081/actuator/prometheus`(ALB 미연결, 모니터링 SG만 허용). 대상은 `ecs-discovery`가 30초마다 ECS API로 갱신 | Prometheus |
+| 배포·태스크 중지 | `ecs-discovery`가 ECS 배포 시작·완료(리비전, 소스 SHA)와 정상 롤링 외 태스크 중지(사유, 종료 코드)를 Grafana 표시로 기록 | Grafana |
 | AI 서버 컨테이너 로그·호스트 지표 | AI EC2 `memme-alloy` (서명 URL·토큰 마스킹) | Loki, Prometheus |
 | MySQL Primary·Replica | 모니터링 서버 `mysqld-exporter`가 TLS(CA 검증)로 접속, 계정 `memme_monitor@10.0.1.8` | Prometheus |
 | ProxySQL | 제어 서버 내장 지표 `:6070/metrics` | Prometheus |
@@ -45,6 +48,7 @@ RunPod GPU Pod(Alloy) ─ ingest.memme.kr(Access 서비스 토큰) ────�
 | 영역 | Grafana 규칙 (Discord) |
 |---|---|
 | ECS | 웹 태스크 부족, 배치 태스크 없음, 웹 CPU·메모리 |
+| BE 앱 | 지표 수집 중단, DB 연결 대기 2분, 요청 스레드 80% 이상 |
 | DB | 접속 실패, 쓰기 가능 DB 수 ≠ 1, 복제 중지, 복제 지연 30초, 연결 사용률 |
 | ProxySQL | 수집 실패, 쓰기 hostgroup ONLINE 0개, 연결 한도 초과 거부 |
 | 서버 | 디스크, 메모리, 지표 수집 중단 |

@@ -1,0 +1,18 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EcsBackendDiscoveryRead",
+      "Effect": "Allow",
+      "Action": ["ecs:ListTasks", "ecs:DescribeTasks", "ecs:DescribeServices"],
+      "Resource": "*",
+      "Condition": {"ArnEquals": {"ecs:cluster": "arn:aws:ecs:ap-northeast-2:613538400341:cluster/memme-v2"}}
+    },
+    {
+      "Sid": "EcsTaskDefinitionTagsRead",
+      "Effect": "Allow",
+      "Action": "ecs:DescribeTaskDefinition",
+      "Resource": "*"
+    }
+  ]
+}

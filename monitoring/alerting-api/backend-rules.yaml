@@ -1,0 +1,62 @@
+# memme V2 BE 앱 알림 → 기본 정책(discord-memme). Grafana API로 만든 그룹 backend의 기록본(uid 충돌 주의, gpu-rules.yaml 참고)
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: backend
+    folder: memme-v2 알림
+    interval: 1m
+    rules:
+      - uid: memme-be-scrape
+        title: BE 앱 지표 수집 중단
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'count(up{job="backend",service="web"} == 1) or vector(0)' }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: lt, params: [2] } } ] }
+        for: 5m
+        noDataState: Alerting
+        execErrState: Error
+        labels: { area: backend }
+        annotations:
+          summary: "BE 웹 태스크 지표가 2개 미만으로 수집됩니다. ecs-discovery 로그, 관리 포트 8081 SG, 태스크 상태 확인"
+
+      - uid: memme-be-pool-pending
+        title: BE DB 연결 대기 발생
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'max(max_over_time(hikaricp_connections_pending{job="backend",service="web"}[2m]))' }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: gt, params: [0] } } ] }
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels: { area: backend }
+        annotations:
+          summary: "BE 웹의 DB 연결을 기다리는 요청이 2분 넘게 있습니다. BE 앱 대시보드에서 느린 API와 연결 풀 확인"
+
+      - uid: memme-be-threads
+        title: BE 요청 스레드 80% 이상 사용
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'max(tomcat_threads_busy_threads{job="backend",service="web",name=~".*8080.*"} / tomcat_threads_config_max_threads{job="backend",service="web",name=~".*8080.*"})' }
+          - refId: C
+            datasourceUid: __expr__
+            model: { refId: C, type: threshold, expression: A, conditions: [ { evaluator: { type: gt, params: [0.8] } } ] }
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels: { area: backend }
+        annotations:
+          summary: "BE 웹 Tomcat 요청 스레드가 80% 이상 찼습니다. 계속되면 /health도 늦어져 태스크가 교체됩니다. 요청 폭주·느린 API 확인"
