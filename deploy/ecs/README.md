@@ -28,6 +28,8 @@ python3 deploy/ecs/deploy_backend.py rollback --target batch --task-definition m
 
 ## 배치
 
+매출 Outbox의 웹 접수·배치 실행 역할, 공유 S3, Primary 경로의 적용 준비와 읽기 전용 점검은 [Outbox 운영 설정](OUTBOX.md)을 따른다. 역할 설정 추가만으로 Outbox를 활성화하지 않는다.
+
 배치는 스케줄러 5개를 단독으로 실행한다. 웹 태스크는 스케줄러가 비활성(`-`)이어야 하고, 배치는 두 개가 동시에 돌면 같은 작업이 두 번 실행된다.
 
 - 서비스가 desired=1, 0/100, ALB·Cloud Map 미등록이 아니면 변경 전에 중단한다. 0/100이면 ECS가 기존 태스크를 멈춘 뒤 새 태스크를 시작한다.

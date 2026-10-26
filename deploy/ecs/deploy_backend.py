@@ -109,9 +109,42 @@ def prepare_definition(td, digest, source_sha, kind='web'):
         raise DeploymentError('Invalid immutable image identity')
     result = {k: copy.deepcopy(td[k]) for k in REGISTER_FIELDS if k in td}
     result['containerDefinitions'][0]['image'] = IMAGE_PREFIX + digest
+    prepare_outbox_runtime(result['containerDefinitions'][0], kind)
     result['tags'] = [{'key': 'Project', 'value': 'memme'}, {'key': 'Service', 'value': target(kind)['family']},
                       {'key': 'SourceSha', 'value': source_sha}]
     return result
+
+
+def prepare_outbox_runtime(container, kind):
+    """Separate the scheduler role without enabling Outbox or changing Secrets/DB endpoints."""
+    environment = container.get('environment', [])
+    env = {x['name']: x['value'] for x in environment}
+    secret_names = {x['name'] for x in container.get('secrets', [])}
+    controlled = {'SPRING_PROFILES_ACTIVE', 'SALES_OUTBOX_ENABLED', 'SALES_OUTBOX_DISPATCH_ENABLED'}
+    if controlled & secret_names:
+        raise DeploymentError('Outbox role controls must be explicit non-secret task environment values')
+    if any(name.startswith('APP_SALES_OUTBOX_') for name in env.keys() | secret_names):
+        raise DeploymentError('Use the documented SALES_OUTBOX task settings without alias overrides')
+    if len([x for x in environment if x['name'] in controlled]) != len(controlled & env.keys()):
+        raise DeploymentError('Duplicate Outbox runtime environment settings')
+    enabled = env.get('SALES_OUTBOX_ENABLED', 'false')
+    if enabled not in ('true', 'false'):
+        raise DeploymentError('SALES_OUTBOX_ENABLED must be explicit true or false')
+    role = 'sales-outbox-' + kind
+    profiles = [p.strip() for p in env.get('SPRING_PROFILES_ACTIVE', '').split(',') if p.strip()]
+    if any(p in ('sales-outbox-web', 'sales-outbox-batch') and p != role for p in profiles):
+        raise DeploymentError('Outbox runtime profile conflicts with the ECS service role')
+    if enabled == 'true':
+        if 'SALES_STORAGE_TYPE' in secret_names or env.get('SALES_STORAGE_TYPE') != 's3':
+            raise DeploymentError('Enabled ECS Outbox requires explicit SALES_STORAGE_TYPE=s3')
+        if not env.get('SALES_STORAGE_S3_BUCKET', '').strip() and 'SALES_STORAGE_S3_BUCKET' not in secret_names:
+            raise DeploymentError('Enabled ECS Outbox requires a shared sales bucket reference')
+    if role not in profiles:
+        profiles.append(role)
+    updates = {'SPRING_PROFILES_ACTIVE': ','.join(profiles),
+               'SALES_OUTBOX_DISPATCH_ENABLED': 'false' if kind == 'web' else 'true'}
+    container['environment'] = [x for x in environment if x['name'] not in updates]
+    container['environment'] += [{'name': name, 'value': value} for name, value in updates.items()]
 
 
 def validate_service(service, kind='web'):
