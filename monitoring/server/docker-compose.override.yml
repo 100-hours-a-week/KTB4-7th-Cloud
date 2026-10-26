@@ -51,3 +51,26 @@ services:
     volumes:
       - /:/host:ro,rslave
     mem_limit: 64m
+
+  # BE ECS 태스크 위치를 file_sd로 기록(sd/ecs-backend.json)하고 배포·태스크 중지를 Grafana 주석으로 남김
+  # 인스턴스 역할 권한: ec2/ecs-read-policy.json. 표준 라이브러리만 사용
+  ecs-discovery:
+    image: python:3.13.1-slim
+    restart: unless-stopped
+    command: python -u /app/ecs_discovery.py
+    environment:
+      AWS_REGION: ap-northeast-2
+      GRAFANA_PASSWORD: ${GF_ADMIN_PASSWORD}
+    volumes:
+      - ./ecs-discovery/ecs_discovery.py:/app/ecs_discovery.py:ro
+      - ./sd:/sd
+      - ecs-discovery-state:/state
+    depends_on: [grafana]
+    mem_limit: 64m
+
+  prometheus:
+    volumes:
+      - ./sd:/etc/prometheus/sd:ro
+
+volumes:
+  ecs-discovery-state:

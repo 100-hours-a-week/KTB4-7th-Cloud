@@ -50,3 +50,11 @@ scrape_configs:
         labels: { host: db-control, instance: "10.0.11.9" }
       - targets: ["node-exporter:9100"]
         labels: { host: monitoring, instance: "10.0.1.8" }
+
+  # BE 웹·배치 (Spring Boot Actuator, 관리 포트 8081은 ALB에 연결되지 않음). 대상은 ecs-discovery가 30초마다 갱신
+  - job_name: backend
+    metrics_path: /actuator/prometheus
+    scrape_interval: 15s
+    file_sd_configs:
+      - files: [/etc/prometheus/sd/ecs-backend.json]
+        refresh_interval: 30s
