@@ -1,5 +1,5 @@
 # memme V2 AWS 지표(CloudWatch 데이터소스) 알림 → 기본 정책(discord-memme)
-# Grafana API로 만든 그룹 aws의 요약 기록본(2026-10-22). 같은 내용의 CloudWatch 이메일 알람은 지워 중복을 없앴다.
+# Grafana API로 만든 그룹 aws의 요약 기록본(2026-10-22 작성, 10/26 벤치마크 기반 조정: 응답 지연·5xx를 1시간 비율 방식으로). 같은 내용의 CloudWatch 이메일 알람은 지워 중복을 없앴다.
 # 공통: datasourceUid cloudwatch, region ap-northeast-2, A(CloudWatch) → B reduce last(dropNN) → C threshold, interval 1m
 # 파일 관리로 옮길 때는 API 규칙을 먼저 지운다(uid 충돌)
 apiVersion: 1
@@ -12,9 +12,10 @@ groups:
     rules:
       - { uid: memme-alb-healthy-low,  title: ALB 정상 웹 서버 2개 미만, namespace: AWS/ApplicationELB, metric: HealthyHostCount, stat: Minimum, period: 60, condition: "< 2", for: 2m, noDataState: Alerting }
       - { uid: memme-alb-healthy-zero, title: 서비스 전체 중단(정상 웹 서버 0개), namespace: AWS/ApplicationELB, metric: HealthyHostCount, stat: Maximum, period: 60, condition: "< 1", for: 1m, noDataState: Alerting }
-      - { uid: memme-alb-elb-5xx,      title: ALB 5xx 증가, namespace: AWS/ApplicationELB, metric: HTTPCode_ELB_5XX_Count, stat: Sum, period: 300, condition: "> 9", for: 0m, noDataState: OK }
-      - { uid: memme-backend-5xx,      title: 백엔드 5xx 증가, namespace: AWS/ApplicationELB, metric: HTTPCode_Target_5XX_Count, stat: Sum, period: 300, condition: "> 9", for: 0m, noDataState: OK }
-      - { uid: memme-backend-latency,  title: 백엔드 응답 시간 p95 3초 초과, namespace: AWS/ApplicationELB, metric: TargetResponseTime, stat: p95, period: 300, condition: "B > 3 && E(RequestCount Sum, 5분) >= 50", for: 0m, noDataState: OK }   # 10/26 조정: 요청 적은 구간의 오경보 제외(14일 23회 → 6회, 10/22 폭주 포함)
+      - { uid: memme-alb-elb-5xx,      title: ALB 5xx 비율 (1시간), namespace: AWS/ApplicationELB, metric: "HTTPCode_ELB_5XX_Count Sum / RequestCount Sum (LoadBalancer)", period: 300, window: 1h(reduce sum), condition: "요청 >= 30 && 비율 > 5%", for: 0m, noDataState: OK }   # 10/26: AWS 권장(트래픽 약 5%) 비율 방식. 14일 재생: 10/20 배포·10/22 폭주만 해당
+      - { uid: memme-backend-5xx,      title: 백엔드 5xx 비율 (1시간), namespace: AWS/ApplicationELB, metric: "HTTPCode_Target_5XX_Count Sum / RequestCount Sum (LB+TG)", period: 300, window: 1h(reduce sum), condition: "요청 >= 30 && 비율 > 5%", for: 0m, noDataState: OK }   # 10/26: 14일 재생: 10/17 DB 이전 시간대 2회만 해당
+      - { uid: memme-backend-latency,  title: "응답 지연: 오류 예산 빠른 소진 (1시간)", namespace: AWS/ApplicationELB, metric: "1 - TargetResponseTime TC(:3) / SampleCount", period: 300, window: 1h(reduce sum), condition: "요청 >= 30 && 3초 초과 비율 > 72%", for: 0m, noDataState: OK }   # 10/26: SLO 요청 95% 3초 안, SRE Workbook 빠른 소진(14.4배). 기존 p95 규칙 대체. 14일 재생: 10/22 폭주만 해당
+      - { uid: memme-latency-burn-slow, title: "응답 지연: 오류 예산 느린 소진 (6시간)", namespace: AWS/ApplicationELB, metric: "1 - TargetResponseTime TC(:3) / SampleCount", period: 300, window: 6h(reduce sum), condition: "요청 >= 60 && 3초 초과 비율 > 30%", for: 0m, noDataState: OK }   # 10/26 추가: SRE Workbook 느린 소진(6배)
       - { uid: memme-redis-memory,     title: Redis 메모리 80% 초과, namespace: AWS/ElastiCache, metric: DatabaseMemoryUsagePercentage, stat: Maximum, period: 300, condition: "> 80", for: 0m, noDataState: OK }
       - { uid: memme-redis-evictions,  title: Redis eviction 발생, namespace: AWS/ElastiCache, metric: Evictions, stat: Sum, period: 300, condition: "> 0", for: 0m, noDataState: OK }
       - { uid: memme-ec2-status,       title: EC2 상태 검사 실패, namespace: AWS/EC2, metric: StatusCheckFailed, stat: Maximum, period: 60, dimensions: "InstanceId=* (matchExact false, 인스턴스별 알림)", condition: "> 0", for: 2m, noDataState: OK }

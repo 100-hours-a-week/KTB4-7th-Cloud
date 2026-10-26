@@ -13,7 +13,7 @@ RunPod GPU Pod(Alloy) ─ ingest.memme.kr(Access 서비스 토큰) ────�
 │                        ├─ Loki (14일)        ← AI 서버 Alloy, GPU Pod Alloy                          │
 │                        └─ CloudWatch 데이터소스 (ALB·ECS·EC2·Redis 지표, Backend 로그)                 │
 └──────────────────────────────────────────────────────────────────────────────────────┘
-알림: Grafana 규칙 27개 → Discord / CloudWatch 알람 4개 → SNS → 이메일 (모니터링 서버 장애 대비 백업)
+알림: Grafana 규칙 28개 → Discord / CloudWatch 알람 4개 → SNS → 이메일 (모니터링 서버 장애 대비 백업)
 ```
 
 ## 디렉터리
@@ -22,7 +22,7 @@ RunPod GPU Pod(Alloy) ─ ingest.memme.kr(Access 서비스 토큰) ────�
 |---|---|
 | `server/` | 모니터링 서버 `/opt/monitoring`에 그대로 두는 파일. compose, Prometheus, Loki, Grafana 프로비저닝(데이터소스, Discord 연락처, 알림 규칙 15개) |
 | `alerting-api/gpu-rules.yaml` | Grafana API로 만든 GPU 알림 4개의 기록본(서버 프로비저닝 폴더에 넣지 않음) |
-| `alerting-api/aws-rules.yaml` | Grafana API로 만든 AWS 지표(ALB·Redis·EC2) 알림 8개의 요약 기록본 |
+| `alerting-api/aws-rules.yaml` | Grafana API로 만든 AWS 지표(ALB·Redis·EC2) 알림 9개의 요약 기록본 |
 | `dashboards/` | Grafana 대시보드 5개: 서비스 개요, BE 앱, AI 서버, DB, GPU. 모두 배포(파랑)·비정상 태스크 중지(빨강) 표시 포함 |
 | `alloy/ai-server.alloy` | AI EC2의 `memme-alloy` 컨테이너 설정 (`/opt/alloy/config.alloy`) |
 | `alloy/gpu-pod/` | RunPod Pod 수집기 설정·시작 스크립트·AI팀 안내 |
@@ -54,7 +54,7 @@ RunPod GPU Pod(Alloy) ─ ingest.memme.kr(Access 서비스 토큰) ────�
 | ProxySQL | 수집 실패, 쓰기 hostgroup ONLINE 0개, 연결 한도 초과 거부 |
 | 서버 | 디스크, 메모리, 지표 수집 중단 |
 | GPU | 수집 중단, 온도 85℃, vLLM 대기열 적체, vLLM 요청 거부 |
-| AWS | ALB 정상 웹 서버 2개 미만·0개, ALB 5xx, 백엔드 5xx, 응답 시간 p95, Redis 메모리·eviction, EC2 상태 검사(인스턴스별) |
+| AWS | ALB 정상 웹 서버 2개 미만·0개, ALB·백엔드 5xx 비율(1시간 5%), 응답 지연 오류 예산 빠른·느린 소진(SLO 요청 95% 3초 안), Redis 메모리·eviction, EC2 상태 검사(인스턴스별) |
 
 Discord가 기본 경로입니다. CloudWatch 이메일 알람은 모니터링 서버가 멈춰도 알 수 있도록 서비스 전체 중단, DB .185·.65 상태 검사, 모니터링 서버 상태 검사 4개만 남겼습니다. 배포 때마다 오던 ECS 태스크 중지 메일은 삭제했습니다. 기준값은 임시값이며 운영 데이터를 보고 조정합니다.
 
