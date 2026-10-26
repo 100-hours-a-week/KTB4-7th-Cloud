@@ -72,7 +72,7 @@ NAT Gateway는 사용하지 않습니다. DB 서브넷은 인터넷 경로 없�
 | 지표 | Prometheus: AI 서버(Alloy), DB·제어 서버(node_exporter), MySQL(mysqld_exporter, TLS), ProxySQL, RunPod GPU·vLLM(Pod 안 Alloy) |
 | 로그 | Loki: AI 컨테이너 로그, vLLM 로그(Alloy). Backend 로그는 CloudWatch Logs를 Grafana에서 조회 |
 | 대시보드 | Grafana: 서비스 개요, AI 서버, DB, GPU |
-| 알림 규칙 | Grafana 28개 (ECS 태스크 수, ALB 정상 대상, 5xx 비율, 응답 지연 오류 예산 소진, Redis, EC2 상태 검사, DB 접속·쓰기 가능 DB 수·복제, ProxySQL 쓰기 경로, 디스크·메모리, 수집 중단, GPU 수집·온도·vLLM 대기열·거부) → Discord |
+| 알림 규칙 | Grafana 37개 (ECS 태스크 수, ALB 정상 대상, 5xx 비율, 응답 지연 오류 예산 소진, BE API 등급별(일반/무거운 작업/AI) 응답 지연·실패, Redis, EC2 상태 검사, DB 접속·쓰기 가능 DB 수·복제, ProxySQL 쓰기 경로, 디스크·메모리, 수집 중단, GPU 수집·온도·vLLM 대기열·거부) → Discord |
 | 접속 | `grafana.memme.kr`, Cloudflare Access 이메일 인증으로 팀원만 접근 |
 
 Discord가 기본 알림 경로이고, CloudWatch 알람은 모니터링 서버가 멈춰도 동작하도록 꼭 필요한 4개만 백업으로 유지합니다. 모니터링 서버 설정, 대시보드, 수집기 설정, 재구성 절차는 [monitoring/README.md](monitoring/README.md)에 있습니다.
