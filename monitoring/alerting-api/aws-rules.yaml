@@ -14,7 +14,7 @@ groups:
       - { uid: memme-alb-healthy-zero, title: 서비스 전체 중단(정상 웹 서버 0개), namespace: AWS/ApplicationELB, metric: HealthyHostCount, stat: Maximum, period: 60, condition: "< 1", for: 1m, noDataState: Alerting }
       - { uid: memme-alb-elb-5xx,      title: ALB 5xx 증가, namespace: AWS/ApplicationELB, metric: HTTPCode_ELB_5XX_Count, stat: Sum, period: 300, condition: "> 9", for: 0m, noDataState: OK }
       - { uid: memme-backend-5xx,      title: 백엔드 5xx 증가, namespace: AWS/ApplicationELB, metric: HTTPCode_Target_5XX_Count, stat: Sum, period: 300, condition: "> 9", for: 0m, noDataState: OK }
-      - { uid: memme-backend-latency,  title: 백엔드 응답 시간 p95 3초 초과, namespace: AWS/ApplicationELB, metric: TargetResponseTime, stat: p95, period: 300, condition: "> 3", for: 0m, noDataState: OK }
+      - { uid: memme-backend-latency,  title: 백엔드 응답 시간 p95 3초 초과, namespace: AWS/ApplicationELB, metric: TargetResponseTime, stat: p95, period: 300, condition: "B > 3 && E(RequestCount Sum, 5분) >= 50", for: 0m, noDataState: OK }   # 10/26 조정: 요청 적은 구간의 오경보 제외(14일 23회 → 6회, 10/22 폭주 포함)
       - { uid: memme-redis-memory,     title: Redis 메모리 80% 초과, namespace: AWS/ElastiCache, metric: DatabaseMemoryUsagePercentage, stat: Maximum, period: 300, condition: "> 80", for: 0m, noDataState: OK }
       - { uid: memme-redis-evictions,  title: Redis eviction 발생, namespace: AWS/ElastiCache, metric: Evictions, stat: Sum, period: 300, condition: "> 0", for: 0m, noDataState: OK }
       - { uid: memme-ec2-status,       title: EC2 상태 검사 실패, namespace: AWS/EC2, metric: StatusCheckFailed, stat: Maximum, period: 60, dimensions: "InstanceId=* (matchExact false, 인스턴스별 알림)", condition: "> 0", for: 2m, noDataState: OK }

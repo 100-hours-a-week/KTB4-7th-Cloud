@@ -82,13 +82,13 @@ groups:
             model: { refId: B, type: reduce, expression: A, reducer: last, settings: { mode: dropNN } }
           - refId: C
             datasourceUid: __expr__
-            model: { refId: C, type: threshold, expression: B, conditions: [ { evaluator: { type: gt, params: [80] } } ] }
-        for: 10m
+            model: { refId: C, type: threshold, expression: B, conditions: [ { evaluator: { type: gt, params: [70] } } ] }
+        for: 3m   # 10/26 조정: 14일 실측에서 1분 평균 70% 초과 3분 이상은 10/22 폭주(5분)뿐. 기존 80%·10분은 그 폭주를 놓침
         noDataState: OK          # 태스크 부족은 위 규칙이 담당
         execErrState: Error
         labels: { severity: warning, area: ecs }
         annotations:
-          summary: "웹 서비스 평균 CPU가 10분 이상 80%를 넘었습니다 (현재 {{ $values.B }}%)"
+          summary: "웹 서비스 평균 CPU가 3분 이상 70%를 넘었습니다 (현재 {{ $values.B }}%). 요청 폭주·느린 API 확인"
 
       - uid: memme-ecs-web-memory
         title: ECS 웹 메모리 높음
