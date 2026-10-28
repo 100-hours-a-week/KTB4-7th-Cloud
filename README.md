@@ -6,26 +6,26 @@ V1은 EC2 한 대 안의 Blue/Green 배포와 RDS로 운영했습니다. V2에�
 
 ## 아키텍처
 
-![MEMME V2 운영 아키텍처](docs/images/v2-architecture.png)
+![MEMME 운영 아키텍처](docs/images/v2-architecture.png)
 
-주요 연결만 표시한 논리 구성도입니다. 보안 그룹과 VPC 엔드포인트 같은 세부 구성은 생략했습니다. 2026-10-22 운영 AWS 조회 결과를 기준으로 그렸습니다.
+주요 연결만 표시한 논리 구성도입니다. 보안 그룹과 VPC 엔드포인트 같은 세부 구성은 생략했습니다. 2026-10-28 운영 작업 기록을 기준으로 그렸습니다.
 
 ## V2 운영 구성
 
 | 영역 | 구성 | 역할 |
 | --- | --- | --- |
 | Frontend | Cloudflare Workers `memme-fe` | 정적 파일 제공 (`https://memme.kr`) |
-| 진입점 | ALB `memme-v2-alb` | HTTPS 종료, `https://api.memme.kr` 요청을 웹 태스크로 전달, `/internal/*` 외부 요청 차단 |
+| 진입점 | ALB `memme-v2-alb` + WAF `memme-v2-api` | HTTPS 종료, `https://api.memme.kr` 요청을 웹 태스크로 전달, `/internal/*` 외부 요청 차단. WAF가 IP별 요청 수를 제한 |
 | Backend 웹 | ECS Fargate 태스크 2개 (1 vCPU, 2 GB) | API 처리. 롤링 배포 100/200, circuit breaker 자동 롤백 |
 | Backend 배치 | ECS Fargate 태스크 1개 | 스케줄러 단독 실행 (ASOS 날씨, 서울 상권 수집 등). ALB 미등록 |
 | AI | EC2 1대 (t3.medium) | 같은 EC2 안 Blue/Green 컨테이너. RunPod GPU(vLLM) 호출, 실패 시 Claude API로 폴백 |
 | 내부 호출 | Cloud Map `memme.internal` | AI 서버가 Backend 내부 API를 호출하는 사설 경로 |
 | 세션·풀 제어 | ElastiCache Redis (TLS, 전용 사용자) | 웹 2개의 로그인 세션 공유, 웹·배치 DB 연결 풀 제어 |
 | DB | EC2 MySQL 8.4 Primary 1대, Replica 1대 | GTID 복제, TLS 접속. Replica는 읽기 전용 |
-| DB 제어 서버 | EC2 1대 | ProxySQL(앱 접속), MySQL Router(목적지 연결), Orchestrator(상태 감시) |
+| DB 제어 서버 | EC2 1대 | ProxySQL(앱 접속, 연결 한도 64), MySQL Router(목적지 연결), Orchestrator(상태 감시) |
 | 모니터링 | EC2 1대 (t3.small) | Grafana, Prometheus, Loki. Cloudflare Tunnel로 `grafana.memme.kr` 접속 |
 | 이미지 | ECR `memme/backend`, `memme/ai` | 서비스 저장소 CI가 커밋 SHA 태그로 게시 |
-| 파일 | S3 | 매출 업로드 원본, Terraform 원격 state |
+| 파일 | S3 | 매출 업로드 원본, ALB 접근 로그(30일), Terraform 원격 state |
 | 비밀값 | Secrets Manager, SSM Parameter Store | 서비스 런타임 환경변수, 모니터링 자격 정보 |
 
 ### 네트워크
@@ -44,23 +44,24 @@ NAT Gateway는 사용하지 않습니다. DB 서브넷은 인터넷 경로 없�
 | 쓰기 경로 | Backend → ProxySQL → MySQL Router → Primary |
 | 복제 | Primary → Replica, GTID 기반 (`SOURCE_AUTO_POSITION=1`), 복제 연결 TLS |
 | 장애 감시 | Orchestrator가 두 DB 상태를 감시합니다. **자동 복구는 꺼져 있으며** Primary 장애 시 수동으로 전환합니다 |
+| 연결 예산 | 웹·배치 Hikari 풀 최대 10, 최소 유휴 2, 연결 대기 3초. 평소 ProxySQL 연결은 약 8개, 한도 64 |
 | 백업 | 스키마 변경 전 암호화 EBS에 전체 논리 백업을 생성합니다 |
 
-자동 전환은 1차 운영 시험에서 사전 검사 결함으로 승격이 차단돼, 결함을 고친 뒤 재시험 전까지 비활성 상태로 유지합니다.
+자동 전환은 1차 운영 시험에서 사전 검사 결함으로 승격이 차단됐습니다. 결함과 재시험 차단 요인을 보완하고 재활성화 준비까지 마쳤으며, 2차 시험 전까지 비활성 상태로 유지합니다.
 
 ## 배포 (CI/CD)
 
 | 서비스 | CI (서비스 저장소) | CD (이 저장소) |
 | --- | --- | --- |
-| Backend 웹 | `dev` push → 테스트 → ECR 게시 | `Deploy Backend ECS`: ECS 롤링 (100/200) |
-| Backend 배치 | 웹과 같은 이미지 | `Deploy Backend ECS`: 교체 (0/100) |
+| Backend 웹 | `dev` push → 테스트 → ECR 게시 | `Deploy Backend ECS`: ECS 롤링 (100/200), 배치와 동시 배포 |
+| Backend 배치 | 웹과 같은 이미지 | `Deploy Backend ECS`: 교체 (0/100), 웹 실패 시 배치 자동 복구 |
 | AI | `dev` push → 테스트 → ECR 게시 | `Deploy service` (`ai`): SSM으로 EC2 안 Blue/Green 전환 |
 | Frontend | PR·`dev` push에서 린트·테스트·빌드 | `Deploy service` (`frontend`): Wrangler로 Workers 배포 |
 
 - CD는 `main`에서 `workflow_dispatch`로만 실행합니다. CI 성공만으로 운영에 자동 배포되지 않습니다.
 - GitHub Actions는 OIDC로 배포 역할을 받으며, 배포 역할은 대상 서비스 갱신과 고정 검사 문서 실행만 허용합니다.
-- 웹 롤링 배포는 대상 그룹 health check 10초 간격, 등록 해제 대기 30초로 설정해 배포 시간을 7분 13초에서 3분 9초~4분 49초로 줄였습니다.
-- 운영 Backend 이미지에는 Redis 세션 공유·DB 풀 제어 보완이 들어 있지만 Backend `dev`에는 아직 반영되지 않았습니다. 그래서 저장소 변수 `BACKEND_ECS_CD_ENABLED`를 비워 두어 Backend CD 배포를 막아 두었습니다. 롤백은 항상 허용합니다.
+- 웹 롤링 배포는 대상 그룹 health check 10초 간격, 등록 해제 대기 30초로 설정해 배포 시간을 7분 13초에서 3분 9초~4분 49초로 줄였습니다. 웹·배치 동시 배포 적용 후 Backend CD 전체는 약 4분 13초입니다.
+- Redis 세션 공유·DB 풀 제어 보완이 Backend `dev`에 반영돼 CI 이미지를 그대로 배포합니다. 저장소 변수 `BACKEND_ECS_CD_ENABLED`가 `true`일 때만 배포하며, 롤백은 항상 허용합니다.
 
 자세한 절차는 [CD 운영 가이드](docs/CD.md)와 [Backend ECS 배포·복구](deploy/ecs/README.md)를 참고하세요.
 
@@ -70,12 +71,26 @@ NAT Gateway는 사용하지 않습니다. DB 서브넷은 인터넷 경로 없�
 | --- | --- |
 | CloudWatch 알람 | 백업 4개 (서비스 전체 중단, DB 서버 2대·모니터링 서버 상태 검사) → SNS `memme-v2-alerts` → 이메일 |
 | 지표 | Prometheus: AI 서버(Alloy), DB·제어 서버(node_exporter), MySQL(mysqld_exporter, TLS), ProxySQL, RunPod GPU·vLLM(Pod 안 Alloy) |
-| 로그 | Loki: AI 컨테이너 로그, vLLM 로그(Alloy). Backend 로그는 CloudWatch Logs를 Grafana에서 조회 |
-| 대시보드 | Grafana: 서비스 개요, AI 서버, DB, GPU |
+| 로그 | Loki: AI 컨테이너 로그, vLLM 로그(Alloy). Backend 로그는 CloudWatch Logs를 Grafana에서 조회. ALB 접근 로그는 S3(30일), WAF 차단 로그는 CloudWatch Logs(14일) |
+| 배포 표시 | `ecs-discovery`가 ECS 배포 시작·완료와 비정상 태스크 중지를 Grafana에 표시 |
+| 대시보드 | Grafana: 서비스 개요, Backend, AI 서버, DB, GPU (Backend 앱 지표는 해당 Backend 버전 배포 후 수집) |
 | 알림 규칙 | Grafana 37개 (ECS 태스크 수, ALB 정상 대상, 5xx 비율, 응답 지연 오류 예산 소진, BE API 등급별(일반/무거운 작업/AI) 응답 지연·실패, Redis, EC2 상태 검사, DB 접속·쓰기 가능 DB 수·복제, ProxySQL 쓰기 경로, 디스크·메모리, 수집 중단, GPU 수집·온도·vLLM 대기열·거부) → Discord |
 | 접속 | `grafana.memme.kr`, Cloudflare Access 이메일 인증으로 팀원만 접근 |
 
 Discord가 기본 알림 경로이고, CloudWatch 알람은 모니터링 서버가 멈춰도 동작하도록 꼭 필요한 4개만 백업으로 유지합니다. 모니터링 서버 설정, 대시보드, 수집기 설정, 재구성 절차는 [monitoring/README.md](monitoring/README.md)에 있습니다.
+
+## 부하·공격 대응
+
+10/22 회원가입 API에 스크립트 요청이 몰려 약 7분간 전체 API가 응답하지 못했습니다. 비밀번호 해시가 DB 연결을 쥔 채 CPU를 점유해 연결 풀이 고갈됐고, health check 시간 초과로 교체된 새 태스크가 ProxySQL 연결 한도에 걸려 기동하지 못했습니다.
+
+| 조치 | 내용 |
+| --- | --- |
+| WAF 속도 제한 | `/v1/auth/` POST·PATCH는 IP당 60초 30건 초과 시 429 차단. 전체 요청은 IP당 300초 3,000건 집계 |
+| 로그 | ALB 접근 로그(S3), WAF 로그(CloudWatch Logs)로 출처 추적 |
+| 연결 설정 | Hikari 연결 대기 3초·최소 유휴 2, ProxySQL 연결 한도 32 → 64 |
+| Backend 코드 | 비밀번호 해시를 트랜잭션 밖으로 분리 (Backend 저장소) |
+
+10/27 같은 유형의 요청(단일 IP 534,383건)은 WAF가 22초 만에 차단해 Backend 도달이 0.9%로 줄었고, ELB 5xx와 DB 연결 거부는 0건이었습니다. 차단 전 22초 동안 들어온 요청으로 웹 태스크가 한 차례 교체돼, 해시 동시 실행 제한 등 후속 보완을 진행하고 있습니다.
 
 ## 디렉터리 구조
 
@@ -99,9 +114,9 @@ deploy/
 
 monitoring/                     # V2 모니터링 (README에 구성·재구성 절차)
 ├── server/                     # 모니터링 서버 /opt/monitoring: compose, Prometheus, Loki, Grafana 프로비저닝
-├── dashboards/                 # Grafana 대시보드 4개
+├── dashboards/                 # Grafana 대시보드 5개
 ├── alloy/                      # AI 서버·RunPod GPU Pod 수집기 설정
-├── alerting-api/               # Grafana API로 만든 GPU·AWS 지표 알림 기록본
+├── alerting-api/               # Grafana API로 만든 GPU·AWS·Backend 지표 알림 기록본
 ├── cloudwatch/                 # CloudWatch 알람·SNS 생성 스크립트(초기 구성, 현재는 백업 4개만 유지)
 └── ec2/                        # 모니터링 EC2 생성·부팅 스크립트
 
@@ -130,5 +145,5 @@ python3 -m unittest discover -s tests -v
 | 버전 | 구성 |
 | --- | --- |
 | V1 | Backend·AI 각각 EC2 한 대 안 Blue/Green, RDS MySQL, 호스트 단일 장애점 |
-| V2 (현재) | Backend ECS Fargate 웹 2개·배치 1개, EC2 MySQL Primary·Replica와 ProxySQL, Redis 세션 공유, CloudWatch·Grafana 모니터링 |
+| V2 (현재) | Backend ECS Fargate 웹 2개·배치 1개, EC2 MySQL Primary·Replica와 ProxySQL, Redis 세션 공유, WAF, CloudWatch·Grafana 모니터링 |
 | V3 (설계) | MSA·EKS 전환 설계. 구현 범위에는 포함하지 않습니다 |
