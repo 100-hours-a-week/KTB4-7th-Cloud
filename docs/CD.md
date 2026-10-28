@@ -55,7 +55,7 @@ Frontend는 확인된 FE 커밋을 `VITE_API_BASE_URL=https://api.memme.kr`로 �
 | `AI_INSTANCE_ID` | `i-06c4c159ed4155c70` |
 | `AI_ECR_REPOSITORY` | `memme/ai` |
 | `AI_RUNTIME_SECRET_ID` | `/memme/prod/ai/runtime` |
-| `BACKEND_ECS_CD_ENABLED` | Backend ECS 배포 허용 여부. Redis 보완이 `dev`에 들어가기 전에는 비워 둔다 |
+| `BACKEND_ECS_CD_ENABLED` | Backend ECS 배포 허용 여부. 현재 `true`. 배포를 막아야 할 때만 비운다 |
 | `CLOUDFLARE_ACCOUNT_ID` | `memme-fe` Worker가 속한 Cloudflare 계정 ID |
 
 `BACKEND_INSTANCE_ID`, `BACKEND_ECR_REPOSITORY`, `BACKEND_RUNTIME_SECRET_ID`는 V1용이며 더 이상 읽지 않는다. Actions Secret `CLOUDFLARE_API_TOKEN`에는 `memme-fe` Worker 배포와 `memme.kr` Custom Domain 관리가 가능한 토큰을 등록한다.
