@@ -1,6 +1,6 @@
 # V2 CD 운영 가이드
 
-CI는 각 서비스 저장소의 `dev` push에서 테스트와 이미지 빌드를 하고, Backend와 AI는 커밋 SHA 태그로 ECR에 게시한다. CI 성공만으로 운영에 자동 배포되지는 않는다. CD는 이 저장소 `main`에서 `workflow_dispatch`로만 실행한다.
+CI는 각 서비스 저장소의 `dev` push에서 테스트와 이미지 빌드를 하고, Backend와 AI는 커밋 SHA 태그로 ECR에 게시한다. CD는 이 저장소 `main`의 워크플로가 실행한다. 서비스별 자동 배포 스위치를 켜면 `dev` CI 성공 후 자동으로 시작하고, 끄면 지금처럼 `workflow_dispatch`로만 실행한다. 자동과 수동은 같은 배포 워크플로를 쓴다.
 
 | 서비스 | 실행 환경 | 배포 방식 | 워크플로 |
 | --- | --- | --- | --- |
@@ -15,7 +15,7 @@ V1 Backend EC2는 폐기했다. `Deploy service`에서 `backend` 선택지를 �
 
 절차와 입력은 [deploy/ecs/README.md](../deploy/ecs/README.md)를 따른다. 요약은 다음과 같다.
 
-1. `target=all`이면 웹을 먼저 배포하고, 웹의 태스크·ALB·업무 응답 검사가 모두 통과한 뒤에만 같은 SHA로 배치를 배포한다.
+1. `target=all`이면 웹과 배치를 같은 SHA로 동시에 배포한다. 웹이 실패하면 이미 바뀐 배치를 이전 revision으로 되돌린다.
 2. 웹은 ECS가 새 태스크 2개를 함께 띄워 ALB healthy를 확인한 뒤 기존 태스크를 뺀다. 기존 태스크는 ALB deregistration delay(30초) 동안 진행 중 요청을 마친다. 대상 그룹 health check는 10초 간격, 연속 2회다.
 3. 배치는 스케줄러를 단독으로 소유하므로 두 개가 동시에 돌지 않도록 0/100을 유지한다. 배포 중 잠깐 배치 태스크가 없는 구간이 생긴다.
 4. 롤백은 대상 하나씩, 결과 artifact에 기록된 `rollback_task_definition`으로만 한다.
@@ -24,11 +24,28 @@ V1 Backend EC2는 폐기했다. `Deploy service`에서 `backend` 선택지를 �
 
 저장소 변수 `BACKEND_ECS_CD_ENABLED`가 `true`가 아니면 `mode=deploy`는 시작하지 않는다. 롤백은 항상 허용한다.
 
-2026-10-20 기준 운영 웹 `:16`과 배치 `:7`은 Backend `dev` ba4ff87에 Redis 세션 공유와 DB 풀 보완을 덧붙여 별도 빌드한 이미지다. Backend `dev`에는 이 보완이 아직 없으므로 CI 이미지를 그대로 배포하면 웹 2개 간 세션 공유와 풀 제어가 빠진다. 보완이 `dev`에 머지되고 CI가 이미지를 게시한 뒤 변수를 켠다.
+Redis 세션 공유와 DB 풀 보완은 Backend `dev`(PR #532)에 반영돼 2026-10-22부터 변수를 켜 두었다.
 
 ### DB 스키마 변경
 
 Rolling 중에는 이전 버전과 새 버전 웹이 함께 동작한다. 스키마 변경은 이전 버전도 동작하는 호환 변경을 먼저 적용하고, 컬럼·테이블 제거는 새 버전 배포가 끝난 다음 배포로 미룬다.
+
+## 자동 배포 (`Auto deploy`)
+
+각 서비스 저장소의 `dev` push CI가 마지막 job에서 이 저장소로 `repository_dispatch`(`backend-ci-success`, `ai-ci-success`, `frontend-ci-success`, `client_payload.sha`)를 보낸다. `Auto deploy`는 판단만 하고, 배포는 위의 수동 워크플로를 같은 입력으로 실행한다.
+
+| 순서 | 확인 | 결과 |
+| --- | --- | --- |
+| 1 | `AUTO_DEPLOY_<서비스>` 변수가 `true` | 아니면 건너뜀 |
+| 2 | 전달된 SHA의 `dev` push CI가 성공으로 끝남 (최대 10분 대기) | 실패면 건너뜀 |
+| 3 | 그 SHA가 지금도 `dev` 최신 커밋 | 더 새 커밋이 있으면 건너뜀. 그 커밋의 CI가 다시 보낸다 |
+| 4 | Backend: 웹·배치가 같은 이미지이고, 그 이미지에 CI가 붙인 SHA 태그가 있음 | 아니면 중단(수동 확인) |
+| 5 | Backend: 실행 중 SHA에서 새 SHA로 fast-forward이고 `docker/mysql/` 변경이 없음 | 변경이 있으면 중단. DB에 먼저 적용한 뒤 수동으로 배포한다 |
+| 6 | Backend는 `Deploy Backend ECS`(`target=all`), AI·Frontend는 `Deploy service` 실행 | |
+
+중단은 실패한 run으로 남아 GitHub 알림이 간다. 전달 토큰은 판단 대상만 알려 줄 뿐이며, `dev`에 머지되고 CI를 통과한 커밋만 배포된다.
+
+서비스 저장소에는 Actions Secret `CLOUD_DEPLOY_DISPATCH_TOKEN`이 필요하다. 이 저장소(`KTB4-7th-Cloud`)에만 `Contents: Read and write` 권한을 준 fine-grained 토큰을 쓴다. Secret이 없으면 CI는 전달 단계만 건너뛰고 성공한다.
 
 ## AI와 Frontend (`Deploy service`)
 
@@ -56,6 +73,7 @@ Frontend는 확인된 FE 커밋을 `VITE_API_BASE_URL=https://api.memme.kr`로 �
 | `AI_ECR_REPOSITORY` | `memme/ai` |
 | `AI_RUNTIME_SECRET_ID` | `/memme/prod/ai/runtime` |
 | `BACKEND_ECS_CD_ENABLED` | Backend ECS 배포 허용 여부. 현재 `true`. 배포를 막아야 할 때만 비운다 |
+| `AUTO_DEPLOY_BACKEND`, `AUTO_DEPLOY_AI`, `AUTO_DEPLOY_FRONTEND` | `true`면 해당 서비스 자동 배포. 비우면 수동만 |
 | `CLOUDFLARE_ACCOUNT_ID` | `memme-fe` Worker가 속한 Cloudflare 계정 ID |
 
 `BACKEND_INSTANCE_ID`, `BACKEND_ECR_REPOSITORY`, `BACKEND_RUNTIME_SECRET_ID`는 V1용이며 더 이상 읽지 않는다. Actions Secret `CLOUDFLARE_API_TOKEN`에는 `memme-fe` Worker 배포와 `memme.kr` Custom Domain 관리가 가능한 토큰을 등록한다.
