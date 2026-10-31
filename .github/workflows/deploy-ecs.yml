@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Deploy an explicit image or restore a recorded revision
+        description: deploy an explicit image, previous to undo the last release (web and batch), or rollback to a recorded revision
         required: true
         type: choice
-        options: [deploy, rollback]
+        options: [deploy, previous, rollback]
       target:
         description: all deploys web and batch together; rollback restores one target
         required: true
@@ -76,6 +76,9 @@ jobs:
           case "$MODE" in
             deploy)
               python3 deploy/ecs/deploy_backend.py deploy --target "$TARGET" --source-sha "$SOURCE_SHA"
+              ;;
+            previous)
+              python3 deploy/ecs/deploy_backend.py previous --target all
               ;;
             rollback)
               python3 deploy/ecs/deploy_backend.py rollback --target "$TARGET" --task-definition "$TASK_DEFINITION"
