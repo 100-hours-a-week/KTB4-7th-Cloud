@@ -1,0 +1,98 @@
+name: Auto deploy
+
+# Product dev CI sends `<service>-ci-success` with client_payload.sha after its image or build succeeds.
+# This workflow only decides; the deployment itself runs in the same workflows used by hand.
+on:
+  repository_dispatch:
+    types: [backend-ci-success, ai-ci-success, frontend-ci-success]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-deploy-${{ github.event.action }}
+  cancel-in-progress: false
+
+jobs:
+  route:
+    name: Route ${{ github.event.action }}
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Resolve service and switch
+        id: service
+        env:
+          ACTION: ${{ github.event.action }}
+          BACKEND: ${{ vars.AUTO_DEPLOY_BACKEND }}
+          AI: ${{ vars.AUTO_DEPLOY_AI }}
+          FRONTEND: ${{ vars.AUTO_DEPLOY_FRONTEND }}
+        shell: bash
+        run: |
+          service="${ACTION%-ci-success}"
+          case "$service" in
+            backend) enabled="$BACKEND" ;;
+            ai) enabled="$AI" ;;
+            frontend) enabled="$FRONTEND" ;;
+            *) echo "Unknown dispatch $ACTION" >&2; exit 2 ;;
+          esac
+          echo "name=$service" >> "$GITHUB_OUTPUT"
+          if [[ "$enabled" == 'true' ]]; then
+            echo 'enabled=true' >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Auto deploy off::AUTO_DEPLOY_${service^^} is not true"
+            echo 'enabled=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Test deployment guards
+        if: steps.service.outputs.enabled == 'true'
+        run: python3 -m unittest discover -s tests
+
+      - name: Configure read access to running Backend
+        if: steps.service.outputs.enabled == 'true' && steps.service.outputs.name == 'backend'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::613538400341:role/GitHubActionsBackendECSDeployRole
+          aws-region: ap-northeast-2
+
+      - name: Decide
+        id: decide
+        if: steps.service.outputs.enabled == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SERVICE: ${{ steps.service.outputs.name }}
+          SOURCE_SHA: ${{ github.event.client_payload.sha }}
+        run: python3 deploy/auto_deploy.py "$SERVICE" "$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Start deployment
+        if: steps.decide.outputs.deploy == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SERVICE: ${{ steps.service.outputs.name }}
+          SOURCE_SHA: ${{ github.event.client_payload.sha }}
+        shell: bash
+        run: |
+          if [[ "$SERVICE" == backend ]]; then
+            gh workflow run deploy-ecs.yml --ref main -f mode=deploy -f target=all -f source_sha="$SOURCE_SHA"
+          else
+            gh workflow run deploy.yml --ref main -f service="$SERVICE"
+          fi
+          {
+            echo "## Auto deploy started"
+            echo
+            echo "| Item | Value |"
+            echo "|---|---|"
+            echo "| Service | \`$SERVICE\` |"
+            echo "| Source SHA | \`$SOURCE_SHA\` |"
+            echo "| CI run | ${{ steps.decide.outputs.ci_run_url }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
