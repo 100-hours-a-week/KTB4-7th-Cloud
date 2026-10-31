@@ -218,7 +218,7 @@ def business_smoke(aws, sleep, clock):
 
 
 def execute(mode, source_sha=None, revision=None, *, kind='web', aws=None, sleep=time.sleep,
-            clock=time.monotonic, timeout=1200):
+            clock=time.monotonic, timeout=1200, verify_baseline=True):
     t = target(kind)
     if mode == 'deploy':
         if not re.fullmatch(r'[a-f0-9]{40}', source_sha or '') or revision:
@@ -251,9 +251,11 @@ def execute(mode, source_sha=None, revision=None, *, kind='web', aws=None, sleep
             primary = next((d for d in before['deployments'] if d['status'] == 'PRIMARY'), {})
             if primary.get('rolloutState') != 'COMPLETED' or before.get('pendingCount') != 0:
                 raise DeploymentError('Finish the current deployment before deploying another candidate')
-            report['baseline_runtime'] = wait_healthy(aws, baseline, digest, before, started + timeout, sleep, clock, kind, require_health)
-            if t['public']:
-                report['baseline_smoke'] = business_smoke(aws, sleep, clock)
+            # Undoing a bad release must not wait for that release to pass its own checks.
+            if verify_baseline:
+                report['baseline_runtime'] = wait_healthy(aws, baseline, digest, before, started + timeout, sleep, clock, kind, require_health)
+                if t['public']:
+                    report['baseline_smoke'] = business_smoke(aws, sleep, clock)
             report['rollback_task_definition'] = baseline
             images = aws.call('ecr', 'describe-images', repositoryName='memme/backend',
                               imageIds=[{'imageTag': source_sha}])['imageDetails']
@@ -278,6 +280,26 @@ def execute(mode, source_sha=None, revision=None, *, kind='web', aws=None, sleep
         report.update(error=str(error), elapsed_seconds=round(clock() - started, 1))
         error.report = report
         raise
+
+
+def previous_source_sha(aws, depth=30):
+    """Source SHA of the image web ran before its current one, found in earlier web revisions."""
+    current = aws.call('ecs', 'describe-task-definition',
+                       taskDefinition=get_service(aws, 'web')['taskDefinition'])['taskDefinition']
+    digest = current['containerDefinitions'][0]['image'].split('@', 1)[-1]
+    for number in range(current['revision'] - 1, max(current['revision'] - depth, 0), -1):
+        image = aws.call('ecs', 'describe-task-definition',
+                         taskDefinition=f"{current['family']}:{number}")['taskDefinition']['containerDefinitions'][0]['image']
+        # Revisions registered only for configuration changes keep the same image; skip past them.
+        if '@' not in image or image.split('@', 1)[1] == digest:
+            continue
+        details = aws.call('ecr', 'describe-images', repositoryName='memme/backend',
+                           imageIds=[{'imageDigest': image.split('@', 1)[1]}])['imageDetails']
+        shas = {tag for detail in details for tag in detail.get('imageTags', []) if re.fullmatch(r'[a-f0-9]{40}', tag)}
+        if len(shas) != 1:
+            raise DeploymentError(f"{current['family']}:{number} image has no single source SHA tag; roll back with a recorded revision")
+        return shas.pop()
+    raise DeploymentError(f'No earlier image within {depth} web revisions; roll back with a recorded revision')
 
 
 def deploy_all(source_sha, **options):
@@ -314,14 +336,20 @@ def deploy_all(source_sha, **options):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['deploy', 'rollback'])
+    parser.add_argument('mode', choices=['deploy', 'rollback', 'previous'])
     parser.add_argument('--target', choices=['all', 'web', 'batch'], default='web')
     parser.add_argument('--source-sha')
     parser.add_argument('--task-definition')
     parser.add_argument('--report', default='ecs-deployment-result.json')
     args = parser.parse_args()
     try:
-        if args.target == 'all':
+        if args.mode == 'previous':
+            # One-step undo: redeploy the image that ran before, on today's configuration, web and batch together.
+            if args.target != 'all' or args.source_sha or args.task_definition:
+                raise DeploymentError('previous takes no SHA or revision and always restores web and batch together')
+            report = deploy_all(previous_source_sha(Aws()), verify_baseline=False)
+            report['mode'] = 'previous'
+        elif args.target == 'all':
             if args.mode != 'deploy' or args.task_definition:
                 raise DeploymentError('Rollback restores one target at a time with its own recorded revision')
             report = deploy_all(args.source_sha)

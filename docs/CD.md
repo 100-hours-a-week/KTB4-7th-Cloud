@@ -62,6 +62,29 @@ AI는 서버가 1대라서 Rolling을 할 수 없으므로 같은 EC2 안 Blue/G
 
 Frontend는 확인된 FE 커밋을 `VITE_API_BASE_URL=https://api.memme.kr`로 빌드해 `memme-fe` Worker에 배포하고, `memme.kr`과 `/password-reset` 응답을 확인한다.
 
+## 롤백 (문제가 생긴 배포 되돌리기)
+
+자동 배포 뒤 문제가 생기면 먼저 해당 `AUTO_DEPLOY_<서비스>` 변수를 비워 다음 머지가 다시 배포되지 않게 하고, 아래 버튼으로 직전 버전으로 되돌린다.
+
+| 서비스 | 실행 | 되돌리는 방식 | 소요 |
+| --- | --- | --- | --- |
+| Backend | `Deploy Backend ECS`, `mode=previous`, `target=all` | 웹의 이전 revision에서 직전 이미지 SHA를 찾아, 현재 설정 그대로 웹·배치를 그 이미지로 동시 롤링한다. 문제가 된 버전 자체의 사전 검사는 건너뛴다 | 약 4분 |
+| AI | `Deploy service`, `service=ai`, `action=rollback` | 직전 색상 컨테이너가 아직 떠 있으므로 health 확인 후 Nginx upstream만 되돌린다. 이미지를 다시 받지 않는다 | 1분 이내 |
+| Frontend | `Deploy service`, `service=frontend`, `action=rollback` | `wrangler rollback`으로 직전 Worker 버전에 트래픽 100%를 돌린다. 다시 빌드하지 않는다 | 1분 이내 |
+
+```bash
+gh workflow run deploy-ecs.yml -R 100-hours-a-week/KTB4-7th-Cloud --ref main -f mode=previous -f target=all
+gh workflow run deploy.yml -R 100-hours-a-week/KTB4-7th-Cloud --ref main -f service=ai -f action=rollback
+gh workflow run deploy.yml -R 100-hours-a-week/KTB4-7th-Cloud --ref main -f service=frontend -f action=rollback
+```
+
+주의할 점은 다음과 같다.
+
+- Backend `previous`는 DB 스키마를 되돌리지 않는다. 직전 배포에 마이그레이션이 있었다면 앱만 되돌리면 안 된다.
+- 한 번 더 실행하면 Backend·Frontend는 더 이전 버전으로 간다. AI는 두 색상만 있으므로 방금 되돌린 버전으로 다시 돌아온다.
+- Backend에서 특정 revision으로 되돌려야 하면 기존처럼 `mode=rollback`에 대상 하나와 revision을 지정한다.
+- 원인을 고친 커밋이 `dev`에 머지되고 변수를 다시 켜면 자동 배포가 이어진다.
+
 ## Cloud Repository Variables
 
 | 이름 | 값 |

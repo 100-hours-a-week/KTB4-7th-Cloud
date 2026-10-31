@@ -142,6 +142,8 @@ if ! write_upstream "${candidate}" \
 fi
 
 printf '%s\n' "${candidate}" > "${active_file}"
+# The previous color stays running until the next deployment; rollback-blue-green.sh switches back to it.
+cp "${state_dir}/current-deployment.json" "${state_dir}/previous-deployment.json" 2>/dev/null || true
 cat > "${state_dir}/current-deployment.json" <<EOF_RECORD
 {"service":"${service}","color":"${candidate}","image":"${image}","commitSha":"${commit_sha}","deployedAt":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","health":"ok"}
 EOF_RECORD

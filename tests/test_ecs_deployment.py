@@ -398,6 +398,61 @@ class EcsBatchDeploymentTests(unittest.TestCase):
         self.assertNotIn('batch_restore', report)
 
 
+class PreviousImageTests(unittest.TestCase):
+    def history(self, *images):
+        """Web revisions 1..n with the given (digest, tags) per revision; the last one is running."""
+        aws = FakeAws()
+        tags = {}
+        for number, (digest, image_tags) in enumerate(images, 1):
+            td = definition(PREFIX + str(number))
+            td['containerDefinitions'][0]['image'] = td['containerDefinitions'][0]['image'].split('@')[0] + '@' + digest
+            aws.definitions[PREFIX + str(number)] = td
+            aws.definitions[f'memme-backend-v2:{number}'] = td
+            tags[digest] = image_tags
+        aws.current = PREFIX + str(len(images))
+        original = aws.call
+
+        def call(namespace, operation, **p):
+            if operation == 'describe-images' and 'imageDigest' in p['imageIds'][0]:
+                aws.calls.append((namespace, operation, p))
+                return {'imageDetails': [{'imageTags': tags[p['imageIds'][0]['imageDigest']]}]}
+            return original(namespace, operation, **p)
+        aws.call = call
+        return aws
+
+    def test_skips_configuration_only_revisions_to_the_previous_image(self):
+        old, new = 'sha256:' + '2' * 64, DIGEST
+        aws = self.history((old, ['b' * 40]), (new, [SHA]), (new, [SHA]))
+        self.assertEqual(MODULE.previous_source_sha(aws), 'b' * 40)
+
+    def test_previous_image_without_source_sha_needs_a_recorded_revision(self):
+        aws = self.history(('sha256:' + '2' * 64, ['prod-dev-web-local']), (DIGEST, [SHA]))
+        with self.assertRaisesRegex(MODULE.DeploymentError, 'no single source SHA'):
+            MODULE.previous_source_sha(aws)
+
+    def test_no_earlier_image_is_refused(self):
+        aws = self.history((DIGEST, [SHA]), (DIGEST, [SHA]))
+        with self.assertRaisesRegex(MODULE.DeploymentError, 'No earlier image'):
+            MODULE.previous_source_sha(aws)
+
+    def test_undo_skips_checks_of_the_bad_running_release(self):
+        aws = FakeAws(broken_baseline=True)
+        with self.assertRaises(MODULE.DeploymentError):
+            MODULE.execute('deploy', SHA, None, aws=aws)
+        aws = FakeAws(functional_failure=False)
+        aws.broken_baseline = True
+        original = aws.call
+
+        def call(namespace, operation, **p):
+            if operation == 'update-service':
+                aws.broken_baseline = False
+            return original(namespace, operation, **p)
+        aws.call = call
+        result = MODULE.execute('deploy', SHA, None, aws=aws, verify_baseline=False)
+        self.assertEqual((result['status'], result['task_definition']), ('PASS', NEW))
+        self.assertNotIn('baseline_smoke', result)
+
+
 class ContainerOverrideTests(unittest.TestCase):
     def test_reviewed_db_ca_bootstrap_is_accepted_for_web_and_batch(self):
         for kind, td in (('web', definition()), ('batch', batch_definition())):
